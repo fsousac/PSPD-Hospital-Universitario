@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+// ESQUELETO — mensagens e serviço a definir após escolha de stack do Patient Data Service.
+// Stubs de código NÃO gerados intencionalmente (dependem da linguagem do serviço).
+
+package hu.patientdata.v1;
+
+// TODO: definir opções java_package / go_package / etc. após decisão de stack
+
+// import "authorization.proto";  // para receber AccessLevel no contexto da requisição
+
+// Exemplo de shape esperado — ajustar com o grupo:
+//
+// message GetPatientRequest {
+//   string patient_id = 1;
+//   AccessLevel access_level = 2;  // recebido do Authorization Service
+// }
+//
+// message PatientRecord {
+//   string id = 1;
+//   string name = 2;           // omitido em ANONYMIZED/AGGREGATED
+//   string cpf = 3;            // omitido em PARTIAL/ANONYMIZED/AGGREGATED
+//   string birth_date = 4;     // faixa etária em ANONYMIZED
+//   // ... demais campos
+// }
+//
+// message ListPatientEncountersRequest {
+//   string patient_id = 1;
+//   AccessLevel access_level = 2;
+// }
+//
+// service PatientDataService {
+//   rpc GetPatient(GetPatientRequest) returns (PatientRecord);
+//   rpc ListEncounters(ListPatientEncountersRequest) returns (stream EncounterRecord);
+//   rpc GetClinicalEvents(GetClinicalEventsRequest) returns (stream ClinicalEventRecord);
+// }

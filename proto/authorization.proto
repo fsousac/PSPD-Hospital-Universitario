@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package hu.authorization.v1;
+
+option java_package = "br.unb.pspd.hu.auth.grpc";
+option java_outer_classname = "AuthorizationProto";
+option java_multiple_files = true;
+
+// Nível de acesso retornado pela decisão de autorização.
+enum AccessLevel {
+  ACCESS_LEVEL_UNSPECIFIED = 0;
+  // Acesso completo — todos os campos do prontuário
+  FULL = 1;
+  // Acesso parcial — campos clínicos sem identificadores diretos
+  PARTIAL = 2;
+  // Acesso anonimizado — identificadores substituídos por tokens
+  ANONYMIZED = 3;
+  // Acesso agregado — apenas estatísticas / contagens, sem registros individuais
+  AGGREGATED = 4;
+}
+
+// Tipo de recurso clínico acessado.
+enum ResourceType {
+  RESOURCE_TYPE_UNSPECIFIED = 0;
+  PATIENT = 1;
+  ENCOUNTER = 2;
+  CLINICAL_EVENT = 3;
+  RESEARCH_PROJECT = 4;
+}
+
+// Ação solicitada sobre o recurso.
+enum Action {
+  ACTION_UNSPECIFIED = 0;
+  READ = 1;
+  LIST = 2;
+  AGGREGATE = 3;
+}
+
+message AuthorizeRequest {
+  // JWT emitido pelo Keycloak (Bearer token, sem o prefixo "Bearer ")
+  string jwt_token = 1;
+
+  // Tipo do recurso sendo acessado
+  ResourceType resource_type = 2;
+
+  // ID do recurso (patient_id, encounter_id, project_id etc.)
+  string resource_id = 3;
+
+  // Ação desejada sobre o recurso
+  Action action = 4;
+}
+
+message AuthorizeResponse {
+  // true = acesso permitido; false = acesso negado
+  bool allowed = 1;
+
+  // Preenchido apenas quando allowed = true
+  AccessLevel access_level = 2;
+
+  // Mensagem legível para logging/auditoria (nunca exposta ao usuário final)
+  string reason = 3;
+
+  // ID do usuário extraído do JWT, para fins de auditoria
+  string subject_id = 4;
+}
+
+message ValidateTokenRequest {
+  string jwt_token = 1;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  // subject (sub) do JWT quando válido
+  string subject_id = 2;
+  // perfis/roles do usuário: "medico", "estagiario", "pesquisador"
+  repeated string roles = 3;
+  string reason = 4;
+}
+
+// Serviço de autorização chamado pelos demais microsserviços via gRPC.
+service AuthorizationService {
+  // Decide ALLOW/DENY + nível de acesso para uma operação sobre um recurso.
+  rpc Authorize(AuthorizeRequest) returns (AuthorizeResponse);
+
+  // Valida o JWT e retorna os dados do subject (usado pelo API Gateway).
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+}

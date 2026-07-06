@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+// ESQUELETO — mensagens e serviço a definir após escolha de stack do Data Transform Service.
+// Stubs de código NÃO gerados intencionalmente (dependem da linguagem do serviço).
+
+package hu.datatransform.v1;
+
+// TODO: definir opções java_package / go_package / etc. após decisão de stack
+
+// Recursos FHIR produzidos: Patient, Encounter, Condition, Observation, MedicationRequest
+// Referência: https://hl7.org/fhir/R4/
+
+// Exemplo de shape esperado — ajustar com o grupo:
+//
+// message FhirTransformRequest {
+//   string patient_id = 1;
+//   AccessLevel access_level = 2;  // de authorization.proto
+//   repeated string resource_types = 3;  // "Patient", "Encounter", etc.
+// }
+//
+// message FhirBundle {
+//   string resource_type = 1;  // sempre "Bundle"
+//   string type = 2;           // "searchset" | "collection"
+//   int32 total = 3;
+//   string json_payload = 4;   // Bundle FHIR serializado como JSON
+// }
+//
+// service DataTransformService {
+//   rpc TransformToFhir(FhirTransformRequest) returns (FhirBundle);
+//   rpc AggregateForResearch(AggregateRequest) returns (AggregateBundle);
+// }
