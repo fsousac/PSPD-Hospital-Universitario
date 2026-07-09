@@ -1,12 +1,10 @@
-version: "3.9"
-
 # Sobe apenas Keycloak + PostgreSQL + authorization-service (único serviço pronto).
 # Os demais serviços serão adicionados após definição de stack — ver TODO abaixo.
 
 services:
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     container_name: hu-postgres
     restart: unless-stopped
     environment:
@@ -61,6 +59,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      keycloak:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/q/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # TODO: adicionar api-gateway após definição de stack
   # api-gateway:
