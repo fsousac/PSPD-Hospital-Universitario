@@ -1,6 +1,3 @@
-# Sobe apenas Keycloak + PostgreSQL + authorization-service (único serviço pronto).
-# Os demais serviços serão adicionados após definição de stack — ver TODO abaixo.
-
 services:
 
   postgres:
@@ -68,24 +65,58 @@ services:
       retries: 5
       start_period: 30s
 
+  patient-data-service:
+    build:
+      context: .
+      dockerfile: ./services/patient-data-service/Dockerfile
+    container_name: hu-patient-data-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://hu_user:hu_password@postgres:5432/hu_db
+      GRPC_PORT: "50052"
+      HEALTH_PORT: "8082"
+    ports:
+      - "50052:50052"
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  data-transform-service:
+    build:
+      context: .
+      dockerfile: ./services/data-transform-service/Dockerfile
+    container_name: hu-data-transform-service
+    restart: unless-stopped
+    environment:
+      PATIENT_DATA_SERVICE_URL: patient-data-service:50052
+      GRPC_PORT: "50053"
+      HEALTH_PORT: "8083"
+    ports:
+      - "50053:50053"
+      - "8083:8083"
+    depends_on:
+      patient-data-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   # TODO: adicionar api-gateway após definição de stack
   # api-gateway:
-  #   build: ./services/api-gateway
-  #   ...
-
-  # TODO: adicionar patient-data-service após definição de stack
-  # patient-data-service:
-  #   build: ./services/patient-data-service
-  #   ...
-
-  # TODO: adicionar data-transform-service após definição de stack
-  # data-transform-service:
-  #   build: ./services/data-transform-service
   #   ...
 
   # TODO: adicionar frontend após definição de stack
   # frontend:
-  #   build: ./frontend
   #   ...
 
 volumes:
