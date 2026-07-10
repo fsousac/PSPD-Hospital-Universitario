@@ -30,13 +30,16 @@ VITE_AUTH_MODE=mock
 VITE_ENABLE_MOCKS=true
 ```
 
-Perfis mockados podem ser alternados no dashboard ou pela query string:
+Perfis mockados podem ser selecionados pela query string:
 
 ```text
 http://localhost:5173/?perfil=medico
 http://localhost:5173/?perfil=estagiario
 http://localhost:5173/?perfil=pesquisador
 ```
+
+O perfil selecionado fica salvo em `sessionStorage` apenas para facilitar a
+demonstração local. Tokens reais não são salvos em `localStorage`.
 
 ## Execução com Docker Compose
 

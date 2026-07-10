@@ -27,10 +27,26 @@ const mockUsers = {
   },
 };
 
-function getInitialMockUser() {
+const roleToMockProfile = {
+  [ROLES.DOCTOR]: 'medico',
+  [ROLES.INTERN]: 'estagiario',
+  [ROLES.RESEARCHER]: 'pesquisador',
+};
+
+function normalizeMockProfile(profile) {
+  if (mockUsers[profile]) {
+    return profile;
+  }
+  return roleToMockProfile[profile] || 'medico';
+}
+
+function getInitialMockProfile() {
   const params = new URLSearchParams(window.location.search);
-  const role = params.get('perfil') || sessionStorage.getItem('hu_mock_profile') || 'medico';
-  return mockUsers[role] || mockUsers.medico;
+  return normalizeMockProfile(params.get('perfil') || sessionStorage.getItem('hu_mock_profile') || 'medico');
+}
+
+function getInitialMockUser() {
+  return mockUsers[getInitialMockProfile()];
 }
 
 function getRolesFromTokenParsed(tokenParsed) {
@@ -46,7 +62,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (env.authMode === 'mock') {
-      sessionStorage.setItem('hu_mock_profile', getInitialMockUser().roles[0]);
+      sessionStorage.setItem('hu_mock_profile', getInitialMockProfile());
       return undefined;
     }
 
@@ -85,8 +101,9 @@ export function AuthProvider({ children }) {
 
   const login = useCallback((profile) => {
     if (env.authMode === 'mock') {
-      const nextUser = mockUsers[profile] || mockUsers.medico;
-      sessionStorage.setItem('hu_mock_profile', nextUser.roles[0]);
+      const nextProfile = normalizeMockProfile(profile);
+      const nextUser = mockUsers[nextProfile];
+      sessionStorage.setItem('hu_mock_profile', nextProfile);
       setUser(nextUser);
       setStatus('authenticated');
       return;
