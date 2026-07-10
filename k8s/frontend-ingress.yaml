@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hu-frontend
+  namespace: hu-observability
+  labels:
+    app.kubernetes.io/name: hu-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: hu-observability
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: hu-frontend.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hu-frontend
+                port:
+                  name: http
+

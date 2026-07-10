@@ -53,6 +53,21 @@ A aplicação ficará disponível em:
 http://localhost:8088
 ```
 
+## Kubernetes
+
+Os manifests do frontend ficam em `../k8s/` e sobem a aplicação em modo mock:
+
+```bash
+cd ..
+docker build -t hu-frontend:latest -f frontend/Dockerfile .
+kubectl apply -k k8s/
+kubectl -n hu-observability rollout status deployment/hu-frontend
+```
+
+O Ingress padrão usa `hu-frontend.local`. Quando a API Gateway estiver pronta,
+atualize `k8s/frontend-configmap.yaml` e reconstrua a imagem com mocks
+desabilitados.
+
 ## Segurança
 
 - O frontend chama somente a API Gateway REST.
