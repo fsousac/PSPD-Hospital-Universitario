@@ -1,0 +1,7 @@
+internal/pb/authpb/
+internal/pb/patientpb/
+internal/pb/transformpb/
+gateway
+gateway.exe
+out/
+*.md

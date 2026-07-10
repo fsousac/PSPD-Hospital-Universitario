@@ -1,0 +1,10 @@
+# Stubs gRPC gerados a partir de ../../proto — regenerados por
+# scripts/generate_protos.* e pelo Dockerfile. Não versionar.
+/internal/pb/authpb/
+/internal/pb/patientpb/
+/internal/pb/transformpb/
+
+# Binário compilado
+/gateway
+/gateway.exe
+/out/

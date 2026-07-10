@@ -21,8 +21,8 @@ Frontend → API Gateway → gRPC/HTTP2 →
 
 | Componente             | Status        | Stack                                           | ADR                                      |
 |------------------------|---------------|-------------------------------------------------|------------------------------------------|
-| Frontend               | **a definir** | —                                               | —                                        |
-| API Gateway            | **a definir** | —                                               | —                                        |
+| Frontend               | **a definir** | React                                           | —                                        |
+| API Gateway            | **pronto**    | Go 1.22 + chi + grpc-go + go-oidc + Prometheus  | [ADR 0004](docs/decisions/0004-api-gateway-technical-decisions.md) |
 | Authorization Service  | **pronto**    | Java 21 + Quarkus 3 + Keycloak/OAuth2/OIDC      | [ADR 0001](docs/decisions/0001-authorization-service-technical-decisions.md) |
 | Patient Data Service   | **pronto**    | Python 3 + gRPC + SQLAlchemy async + PostgreSQL | [ADR 0002](docs/decisions/0002-patient-data-service-technical-decisions.md) |
 | Data Transform Service | **pronto**    | Python 3 + gRPC + fhir.resources + Prometheus   | [ADR 0003](docs/decisions/0003-data-transform-service-technical-decisions.md) |
@@ -35,6 +35,40 @@ Frontend → API Gateway → gRPC/HTTP2 →
 - Java 21 (Authorization Service — usa Gradle Wrapper, não precisa instalar Gradle)
 - Python 3.10+ (Patient Data Service e Data Transform Service)
 - kubectl configurado para o cluster kubeadm
+
+---
+
+## API Gateway
+
+Stack: **Go 1.22 + chi + grpc-go + go-oidc + Prometheus**
+
+Ponto de entrada único: recebe REST/JSON do frontend, valida o JWT do Keycloak na
+borda, encaminha aos serviços internos via gRPC e consolida as respostas. Aplica
+rate limiting, logging e expõe `/metrics`.
+
+| Método | Rota | Perfil |
+|--------|------|--------|
+| `GET` | `/api/v1/patients/{id}` | médico / estagiário |
+| `GET` | `/api/v1/me/patients` | médico / estagiário |
+| `GET` | `/api/v1/research/aggregate?condition=&project=` | pesquisador |
+| `GET` | `/healthz`, `/metrics` | — |
+
+```powershell
+# dentro de services/api-gateway/ (requer Go 1.22+ e protoc no PATH)
+.\scripts\generate_protos.ps1
+go mod tidy
+go run ./cmd/gateway
+```
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `GATEWAY_LISTEN_ADDR` | `:8000` | Porta HTTP do gateway |
+| `AUTH_SERVICE_ADDR` | `localhost:8080` | gRPC do Authorization Service |
+| `PATIENT_DATA_SERVICE_ADDR` | `localhost:50052` | gRPC do Patient Data Service |
+| `DATA_TRANSFORM_SERVICE_ADDR` | `localhost:50053` | gRPC do Data Transform Service |
+| `OIDC_ISSUER_URL` | `http://localhost:8180/realms/hu` | Realm do Keycloak |
+
+Ver [ADR 0004](docs/decisions/0004-api-gateway-technical-decisions.md) para decisões técnicas.
 
 ---
 
@@ -169,7 +203,7 @@ docker compose up -d --build
 ├── proto/           # definições gRPC (authorization, patient_data, data_transform)
 ├── frontend/        # stack a definir
 ├── services/
-│   ├── api-gateway/             # stack a definir
+│   ├── api-gateway/             # Go 1.22 + chi + grpc-go
 │   ├── authorization-service/   # Java 21 + Quarkus 3
 │   ├── patient-data-service/    # Python 3 + gRPC + PostgreSQL
 │   └── data-transform-service/  # Python 3 + gRPC + FHIR R4
