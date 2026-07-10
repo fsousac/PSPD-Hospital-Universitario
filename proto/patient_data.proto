@@ -2,16 +2,15 @@ syntax = "proto3";
 
 package hu.patientdata.v1;
 
-// PatientRecord — todos os campos da tabela patients (dados brutos, sem anonimização)
 message PatientRecord {
-  string patient_id  = 1;
-  string full_name   = 2;
-  string birth_date  = 3;  // ISO-8601: "1970-05-10"
-  string gender      = 4;  // "male" | "female" | "other"
-  string city        = 5;
-  string state       = 6;
-  string cpf         = 7;
-  string cns         = 8;
+  string patient_id = 1;
+  string full_name  = 2;
+  string birth_date = 3;
+  string gender     = 4;
+  string city       = 5;
+  string state      = 6;
+  string cpf        = 7;
+  string cns        = 8;
 }
 
 message EncounterRecord {
@@ -19,28 +18,26 @@ message EncounterRecord {
   string patient_id   = 2;
   string start_date   = 3;
   string end_date     = 4;
-  string type         = 5;  // Ambulatorial, Emergência, Internação, Retorno...
-  string department   = 6;  // Cardiologia, Endocrinologia, Pediatria...
+  string type         = 5;
+  string department   = 6;
 }
 
 message ClinicalEventRecord {
   string event_id     = 1;
   string patient_id   = 2;
   string encounter_id = 3;
-  string event_type   = 4;  // "Condição" | "Observação" | "Medicação"
-  string event_code   = 5;  // diabetes_tipo_2, HbA1c, Losartana...
+  string event_type   = 4;
+  string event_code   = 5;
   string description  = 6;
   string event_date   = 7;
-  string value        = 8;  // string para acomodar decimais sem perda
+  string value        = 8;
   string unit         = 9;
 }
 
-// --- GetPatient ---
 message GetPatientRequest {
   string patient_id = 1;
 }
 
-// --- ListEncounters ---
 message ListEncountersRequest {
   string patient_id = 1;
 }
@@ -49,69 +46,50 @@ message ListEncountersResponse {
   repeated EncounterRecord encounters = 1;
 }
 
-// --- GetClinicalEvents ---
 message GetClinicalEventsRequest {
-  string patient_id  = 1;
-  string event_type  = 2;  // filtro opcional: "Condição", "Observação" ou "Medicação"
+  string patient_id = 1;
+  string event_type = 2;
 }
 
 message ListClinicalEventsResponse {
   repeated ClinicalEventRecord events = 1;
 }
 
-// --- GetPatientsByDoctor ---
-// Retorna pacientes vinculados a um médico ou ao supervisor de um estagiário
 message GetPatientsByCarerRequest {
-  string username    = 1;  // username do médico ou estagiário
-  string carer_type  = 2;  // "medico" | "estagiario"
+  string username   = 1;
+  string carer_type = 2;
 }
 
 message PatientListResponse {
   repeated PatientRecord patients = 1;
 }
 
-// --- GetCohortRaw ---
-// Lista de pacientes que possuem clinical_event com event_code == clinical_condition
 message GetCohortRawRequest {
-  string clinical_condition = 1;  // ex.: "diabetes_tipo_2"
+  string clinical_condition = 1;
 }
 
 message CohortRawResponse {
-  repeated PatientRecord patients           = 1;
-  repeated ClinicalEventRecord events       = 2;  // eventos relacionados à condição
+  repeated PatientRecord       patients = 1;
+  repeated ClinicalEventRecord events   = 2;
 }
 
-// --- GetClinicalSummary ---
-// Resumo clínico completo de um paciente (dados + encounters + eventos)
 message GetClinicalSummaryRequest {
   string patient_id = 1;
 }
 
 message ClinicalSummaryRecord {
-  PatientRecord              patient            = 1;
-  repeated EncounterRecord   recent_encounters  = 2;
-  repeated ClinicalEventRecord diagnoses        = 3;
-  repeated ClinicalEventRecord exams            = 4;
-  repeated ClinicalEventRecord medications      = 5;
+  PatientRecord                patient           = 1;
+  repeated EncounterRecord     recent_encounters = 2;
+  repeated ClinicalEventRecord diagnoses         = 3;
+  repeated ClinicalEventRecord exams             = 4;
+  repeated ClinicalEventRecord medications       = 5;
 }
 
-// --- Serviço ---
 service PatientDataService {
-  // Retorna os dados cadastrais de um paciente
-  rpc GetPatient(GetPatientRequest) returns (PatientRecord);
-
-  // Lista atendimentos de um paciente
-  rpc ListEncounters(ListEncountersRequest) returns (ListEncountersResponse);
-
-  // Lista eventos clínicos de um paciente (diagnósticos, exames, medicações)
-  rpc GetClinicalEvents(GetClinicalEventsRequest) returns (ListClinicalEventsResponse);
-
-  // Lista pacientes vinculados a um médico ou estagiário
+  rpc GetPatient(GetPatientRequest)                returns (PatientRecord);
+  rpc ListEncounters(ListEncountersRequest)         returns (ListEncountersResponse);
+  rpc GetClinicalEvents(GetClinicalEventsRequest)   returns (ListClinicalEventsResponse);
   rpc GetPatientsByCarer(GetPatientsByCarerRequest) returns (PatientListResponse);
-
-  // Retorna pacientes de uma condição clínica (para pesquisadores)
-  rpc GetCohortRaw(GetCohortRawRequest) returns (CohortRawResponse);
-
-  // Resumo clínico completo de um paciente
+  rpc GetCohortRaw(GetCohortRawRequest)             returns (CohortRawResponse);
   rpc GetClinicalSummary(GetClinicalSummaryRequest) returns (ClinicalSummaryRecord);
 }
