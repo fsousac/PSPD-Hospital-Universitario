@@ -19,6 +19,12 @@ resources:
   - data-transform-service.yaml
   - ingress.yaml
   - servicemonitors.yaml
+  - frontend-namespace.yaml
+  - frontend-configmap.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  - frontend-ingress.yaml
+  - frontend-hpa.yaml
 
 # O Secret hu-db-credentials NÃO é gerenciado por kustomize/git — é criado
 # manualmente com o valor real da senha:
