@@ -15,6 +15,7 @@ KEYCLOAK_CONTAINER="${KEYCLOAK_CONTAINER:-hu-keycloak}"
 KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:8180}"
 REALM="hu"
 CLIENT_ID="authorization-service"
+FRONTEND_CLIENT_ID="${FRONTEND_CLIENT_ID:-hu-frontend}"
 ADMIN_USER="${KEYCLOAK_ADMIN:-admin}"
 ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 TEST_USER_PASSWORD="${TEST_USER_PASSWORD:-test1234}"
@@ -59,6 +60,30 @@ else
   echo "Criando client '$CLIENT_ID' ..."
   kcadm create clients -r "$REALM" \
     -s clientId="$CLIENT_ID" -s publicClient=true -s directAccessGrantsEnabled=true -s enabled=true
+fi
+
+existing_frontend_client=$(kcadm get clients -r "$REALM" -q clientId="$FRONTEND_CLIENT_ID")
+if [[ "$existing_frontend_client" == *'"clientId"'* ]]; then
+  echo "Client '$FRONTEND_CLIENT_ID' já existe — atualizando redirects/web origins."
+  frontend_uuid=$(echo "$existing_frontend_client" | grep -o '"id" *: *"[^"]*"' | head -n1 | cut -d'"' -f4)
+  kcadm update "clients/$frontend_uuid" -r "$REALM" \
+    -s publicClient=true \
+    -s standardFlowEnabled=true \
+    -s directAccessGrantsEnabled=false \
+    -s 'redirectUris=["http://localhost:5173/*","http://localhost:8088/*","http://localhost:30080/*"]' \
+    -s 'webOrigins=["http://localhost:5173","http://localhost:8088","http://localhost:30080"]' \
+    -s 'attributes."pkce.code.challenge.method"=S256'
+else
+  echo "Criando client público '$FRONTEND_CLIENT_ID' para SPA ..."
+  kcadm create clients -r "$REALM" \
+    -s clientId="$FRONTEND_CLIENT_ID" \
+    -s publicClient=true \
+    -s standardFlowEnabled=true \
+    -s directAccessGrantsEnabled=false \
+    -s enabled=true \
+    -s 'redirectUris=["http://localhost:5173/*","http://localhost:8088/*","http://localhost:30080/*"]' \
+    -s 'webOrigins=["http://localhost:5173","http://localhost:8088","http://localhost:30080"]' \
+    -s 'attributes."pkce.code.challenge.method"=S256'
 fi
 
 # username;role;firstName;lastName — username deve corresponder ao usado em
