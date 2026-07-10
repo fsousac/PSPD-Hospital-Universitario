@@ -1,31 +1,80 @@
 syntax = "proto3";
 
-// ESQUELETO — mensagens e serviço a definir após escolha de stack do Data Transform Service.
-// Stubs de código NÃO gerados intencionalmente (dependem da linguagem do serviço).
-
 package hu.datatransform.v1;
 
-// TODO: definir opções java_package / go_package / etc. após decisão de stack
+// AccessLevel — replicado do authorization.proto para evitar dependência cruzada
+// entre pacotes Python. Deve permanecer em sincronia com authorization.proto.
+enum AccessLevel {
+  ACCESS_LEVEL_UNSPECIFIED = 0;
+  FULL        = 1;  // Médico: todos os campos
+  PARTIAL     = 2;  // Estagiário: sem CPF/CNS, iniciais do nome
+  ANONYMIZED  = 3;  // Pesquisador: hash_id, faixa etária, sem cidade/nome
+  AGGREGATED  = 4;  // Pesquisador: apenas estatísticas agregadas
+}
 
-// Recursos FHIR produzidos: Patient, Encounter, Condition, Observation, MedicationRequest
-// Referência: https://hl7.org/fhir/R4/
+// --- TransformToFhir ---
+// Transforma dados de UM paciente em um FHIR Bundle, aplicando
+// anonimização conforme o nível de acesso.
+message FhirTransformRequest {
+  string patient_id                = 1;
+  AccessLevel access_level         = 2;
+  repeated string resource_types   = 3;  // "Patient","Encounter","Condition","Observation","MedicationRequest"
+                                          // vazio = todos os tipos
+}
 
-// Exemplo de shape esperado — ajustar com o grupo:
-//
-// message FhirTransformRequest {
-//   string patient_id = 1;
-//   AccessLevel access_level = 2;  // de authorization.proto
-//   repeated string resource_types = 3;  // "Patient", "Encounter", etc.
-// }
-//
-// message FhirBundle {
-//   string resource_type = 1;  // sempre "Bundle"
-//   string type = 2;           // "searchset" | "collection"
-//   int32 total = 3;
-//   string json_payload = 4;   // Bundle FHIR serializado como JSON
-// }
-//
-// service DataTransformService {
-//   rpc TransformToFhir(FhirTransformRequest) returns (FhirBundle);
-//   rpc AggregateForResearch(AggregateRequest) returns (AggregateBundle);
-// }
+message FhirBundle {
+  string resource_type = 1;  // sempre "Bundle"
+  string type          = 2;  // "searchset" | "collection"
+  int32  total         = 3;
+  string json_payload  = 4;  // Bundle FHIR R4 serializado como JSON
+}
+
+// --- AggregateForResearch ---
+// Produz estatísticas agregadas de uma coorte para pesquisadores.
+// Não retorna registros individuais — apenas totais, percentuais e distribuições.
+message AggregateRequest {
+  string clinical_condition = 1;  // ex.: "diabetes_tipo_2"
+  string project_id         = 2;  // para rastreio de auditoria
+  AccessLevel access_level  = 3;  // deve ser AGGREGATED ou ANONYMIZED
+}
+
+message AgeDistribution {
+  double age_18_39_pct  = 1;
+  double age_40_59_pct  = 2;
+  double age_60_plus_pct = 3;
+}
+
+message GenderDistribution {
+  double male_pct   = 1;
+  double female_pct = 2;
+  double other_pct  = 3;
+}
+
+message DepartmentFrequency {
+  string department  = 1;
+  double percentage  = 2;
+}
+
+message MedicationFrequency {
+  string medication  = 1;
+  double percentage  = 2;
+}
+
+message AggregateBundle {
+  string clinical_condition              = 1;
+  int32  total_patients                  = 2;
+  GenderDistribution gender_dist         = 3;
+  AgeDistribution    age_dist            = 4;
+  repeated DepartmentFrequency departments   = 5;
+  repeated MedicationFrequency medications   = 6;
+  string json_payload                    = 7;  // bundle completo serializado como JSON
+}
+
+// --- Serviço ---
+service DataTransformService {
+  // Transforma dados de um paciente em FHIR Bundle com nível de anonimização correto
+  rpc TransformToFhir(FhirTransformRequest) returns (FhirBundle);
+
+  // Produz bundle agregado para pesquisa (AGGREGATED/ANONYMIZED)
+  rpc AggregateForResearch(AggregateRequest) returns (AggregateBundle);
+}
