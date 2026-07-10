@@ -38,6 +38,21 @@ http://localhost:5173/?perfil=estagiario
 http://localhost:5173/?perfil=pesquisador
 ```
 
+## Execução com Docker Compose
+
+Enquanto a API Gateway REST não estiver pronta, o serviço `frontend` sobe em
+modo mock:
+
+```bash
+docker compose up -d --build frontend
+```
+
+A aplicação ficará disponível em:
+
+```text
+http://localhost:8088
+```
+
 ## Segurança
 
 - O frontend chama somente a API Gateway REST.
