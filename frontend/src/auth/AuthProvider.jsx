@@ -67,6 +67,7 @@ export function AuthProvider({ children }) {
     }
 
     const client = createKeycloakClient();
+    setKeycloak(client);
     let active = true;
 
     client
@@ -77,7 +78,6 @@ export function AuthProvider({ children }) {
           setStatus('anonymous');
           return;
         }
-        setKeycloak(client);
         setUser({
           username: client.tokenParsed?.preferred_username || client.subject,
           displayName: client.tokenParsed?.name || client.tokenParsed?.preferred_username || 'Usuário',

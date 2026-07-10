@@ -1,7 +1,7 @@
 import { Box, Button, Paper, Stack, Typography } from '@mui/material';
-import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.jsx';
+import { BrandLockup } from '../components/BrandLockup.jsx';
 
 export function Login() {
   const { isAuthenticated, login } = useAuth();
@@ -31,12 +31,10 @@ export function Login() {
         }}
         elevation={0}
       >
-        <Stack spacing={3}>
+          <Stack spacing={3}>
           <Stack spacing={1} alignItems="center">
-            <Box sx={{ alignItems: 'center', bgcolor: 'rgba(15, 118, 110, 0.1)', borderRadius: 1, color: 'primary.main', display: 'flex', height: 56, justifyContent: 'center', width: 56 }}>
-              <LocalHospitalIcon sx={{ fontSize: 34 }} />
-            </Box>
-            <Typography variant="h1" textAlign="center">HU Observability</Typography>
+            <BrandLockup />
+            <Typography variant="h1" textAlign="center" sx={{ mt: 1 }}>Portal seguro</Typography>
             <Typography color="text.secondary" textAlign="center">
               Acesso clínico e pesquisa com perfis controlados.
             </Typography>

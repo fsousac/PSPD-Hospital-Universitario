@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
 import {
   AppBar,
-  Avatar,
   Box,
   Button,
   Chip,
@@ -10,6 +9,7 @@ import {
   Drawer,
   IconButton,
   List,
+  ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
@@ -28,8 +28,11 @@ import { useTheme } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { getPrimaryRole, roleLabel, ROLES } from '../auth/roles.js';
+import { BrandLockup } from '../components/BrandLockup.jsx';
+import { RouteAnnouncer } from '../components/RouteAnnouncer.jsx';
+import { brandTokens } from '../theme/tokens.js';
 
-const drawerWidth = 248;
+const drawerWidth = brandTokens.layout.drawerWidth;
 
 export function AppLayout() {
   const { logout, user } = useAuth();
@@ -53,6 +56,24 @@ export function AppLayout() {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
+      <Box
+        component="a"
+        href="#main-content"
+        sx={{
+          bgcolor: 'primary.dark',
+          color: 'common.white',
+          left: 16,
+          px: 2,
+          py: 1.5,
+          position: 'fixed',
+          top: -80,
+          zIndex: (appTheme) => appTheme.zIndex.tooltip + 1,
+          '&:focus': { top: 12 },
+        }}
+      >
+        Ir para o conteúdo principal
+      </Box>
+      <RouteAnnouncer />
       <AppBar
         position="fixed"
         color="inherit"
@@ -75,24 +96,14 @@ export function AppLayout() {
             <MenuIcon />
           </IconButton>
           <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Avatar variant="rounded" sx={{ bgcolor: 'primary.main', height: 40, width: 40 }}>
-              HU
-            </Avatar>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="h3" noWrap>
-                HU Observability
-              </Typography>
-              <Typography variant="caption" color="text.secondary" noWrap>
-                Monitoramento clínico e pesquisa
-              </Typography>
-            </Box>
+            <BrandLockup compact={false} />
           </Stack>
           <Stack direction="row" spacing={2} alignItems="center">
             <Box sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
               <Typography variant="body2" fontWeight={700}>{user?.displayName}</Typography>
               <Typography variant="caption" color="text.secondary">{roleLabel(role)}</Typography>
             </Box>
-            <Button startIcon={<LogoutIcon />} variant="outlined" onClick={handleLogout} size="small">
+            <Button aria-label="Sair da aplicação" startIcon={<LogoutIcon />} variant="outlined" onClick={handleLogout} size="small">
               <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Sair</Box>
             </Button>
           </Stack>
@@ -118,28 +129,29 @@ export function AppLayout() {
         }}
       >
         <Toolbar sx={{ minHeight: { xs: 64, md: 72 } }} />
-        <Box sx={{ overflow: 'auto', p: 1.5 }}>
-          <List>
+        <Box component="nav" aria-label="Navegação principal" sx={{ overflow: 'auto', p: 1.5 }}>
+          <List disablePadding>
             {navItems.map((item) => (
-              <ListItemButton
-                key={item.path}
-                component={RouterLink}
-                to={item.path}
-                selected={location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)}
-                onClick={() => setMobileOpen(false)}
-                sx={{
-                  borderRadius: 1,
-                  mb: 0.5,
-                  '&.Mui-selected': {
-                    bgcolor: 'rgba(15, 118, 110, 0.1)',
-                    color: 'primary.dark',
-                    '& .MuiListItemIcon-root': { color: 'primary.dark' },
-                  },
-                }}
-              >
-                <ListItemIcon>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.label} />
-              </ListItemButton>
+              <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  component={RouterLink}
+                  to={item.path}
+                  selected={location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)}
+                  aria-current={location.pathname === item.path ? 'page' : undefined}
+                  onClick={() => setMobileOpen(false)}
+                  sx={{
+                    borderRadius: 1,
+                    '&.Mui-selected': {
+                      bgcolor: 'rgba(0, 108, 103, 0.1)',
+                      color: 'primary.dark',
+                      '& .MuiListItemIcon-root': { color: 'primary.dark' },
+                    },
+                  }}
+                >
+                  <ListItemIcon>{item.icon}</ListItemIcon>
+                  <ListItemText primary={item.label} />
+                </ListItemButton>
+              </ListItem>
             ))}
           </List>
           <Divider sx={{ my: 2 }} />
@@ -154,6 +166,8 @@ export function AppLayout() {
 
       <Box
         component="main"
+        id="main-content"
+        tabIndex={-1}
         sx={{
           flexGrow: 1,
           minWidth: 0,
@@ -163,7 +177,7 @@ export function AppLayout() {
         }}
       >
         <Toolbar sx={{ minHeight: { xs: 64, md: 72 } }} />
-        <Box sx={{ maxWidth: 1240, mx: 'auto' }}>
+        <Box sx={{ maxWidth: brandTokens.layout.contentMaxWidth, mx: 'auto' }}>
           <Outlet />
         </Box>
       </Box>

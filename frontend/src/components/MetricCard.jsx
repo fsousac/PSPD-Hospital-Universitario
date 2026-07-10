@@ -57,6 +57,7 @@ export function MetricCard({ title, value, description, icon, color = 'primary',
         {typeof progress === 'number' ? (
           <Box>
             <LinearProgress
+              aria-label={`${title}: ${progress}%`}
               variant="determinate"
               value={progress}
               sx={{

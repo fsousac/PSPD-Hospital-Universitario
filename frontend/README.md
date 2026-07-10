@@ -78,3 +78,15 @@ desabilitados.
 - O JWT não é salvo em `localStorage`.
 - A autorização real, anonimização e agregação permanecem no backend.
 - Tokens e dados clínicos sensíveis não devem ser registrados em logs.
+
+## Qualidade de produto
+
+- Design system: `docs/design-system.md`
+- Protocolo de UX clínica: `docs/ux-clinical-validation.md`
+- Integração, segurança e observabilidade: `docs/integration-security-observability.md`
+
+Testes ponta a ponta em Chrome real nos viewports de celular, tablet, notebook e tela hospitalar:
+
+```bash
+npm run test:e2e
+```

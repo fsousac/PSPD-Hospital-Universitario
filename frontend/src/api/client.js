@@ -15,6 +15,8 @@ export async function apiFetch(path, options = {}) {
   const controller = new AbortController();
   const timeoutMs = options.timeoutMs || 15000;
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  const abortFromCaller = () => controller.abort();
+  options.signal?.addEventListener('abort', abortFromCaller, { once: true });
   const token = await tokenProvider();
   const headers = new Headers(options.headers);
 
@@ -31,7 +33,7 @@ export async function apiFetch(path, options = {}) {
     const response = await fetch(`${env.apiBaseUrl}${path}`, {
       ...options,
       headers,
-      signal: options.signal || controller.signal,
+      signal: controller.signal,
       body: options.body && !(options.body instanceof FormData) ? JSON.stringify(options.body) : options.body,
     });
 
@@ -68,9 +70,15 @@ export async function apiFetch(path, options = {}) {
         correlationId,
       });
     }
-    throw error;
+    if (error instanceof ApiError) throw error;
+    throw new ApiError({
+      status: 0,
+      message: 'Não foi possível conectar ao serviço. Verifique sua rede e tente novamente.',
+      code: 'NETWORK_UNAVAILABLE',
+      correlationId,
+    });
   } finally {
     window.clearTimeout(timeout);
+    options.signal?.removeEventListener('abort', abortFromCaller);
   }
 }
-
