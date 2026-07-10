@@ -5,6 +5,7 @@ import '@fontsource/roboto/700.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { CssBaseline, ThemeProvider } from '@mui/material';
+import { SnackbarProvider } from 'notistack';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App.jsx';
 import { AuthProvider } from './auth/AuthProvider.jsx';
@@ -26,13 +27,14 @@ enableMocks().then(() => {
     <React.StrictMode>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <BrowserRouter>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </BrowserRouter>
+        <SnackbarProvider maxSnack={3} autoHideDuration={3500} anchorOrigin={{ vertical: 'top', horizontal: 'right' }}>
+          <BrowserRouter>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </BrowserRouter>
+        </SnackbarProvider>
       </ThemeProvider>
     </React.StrictMode>,
   );
 });
-

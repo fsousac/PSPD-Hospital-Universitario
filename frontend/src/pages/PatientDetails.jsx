@@ -14,20 +14,29 @@ import {
   Tabs,
   Typography,
 } from '@mui/material';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import CodeIcon from '@mui/icons-material/Code';
+import MedicationIcon from '@mui/icons-material/Medication';
+import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
+import ScienceIcon from '@mui/icons-material/Science';
+import { useSnackbar } from 'notistack';
 import { getClinicalSummary, getFhirBundle } from '../api/patients.js';
 import { AccessLevelChip } from '../components/AccessLevelChip.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
 import { LoadingState } from '../components/LoadingState.jsx';
+import { MetricCard } from '../components/MetricCard.jsx';
+import { PageHeader } from '../components/PageHeader.jsx';
 import { formatDate, genderLabel, protectedValue } from '../utils/format.js';
 
 const tabs = [
-  { key: 'summary', label: 'Resumo clínico' },
-  { key: 'encounters', label: 'Atendimentos' },
-  { key: 'diagnoses', label: 'Diagnósticos' },
-  { key: 'exams', label: 'Exames' },
-  { key: 'medications', label: 'Medicamentos' },
-  { key: 'fhir', label: 'FHIR JSON' },
+  { key: 'summary', label: 'Resumo clínico', icon: <AssignmentIcon /> },
+  { key: 'encounters', label: 'Atendimentos', icon: <CalendarMonthIcon /> },
+  { key: 'diagnoses', label: 'Diagnósticos', icon: <MonitorHeartIcon /> },
+  { key: 'exams', label: 'Exames', icon: <ScienceIcon /> },
+  { key: 'medications', label: 'Medicamentos', icon: <MedicationIcon /> },
+  { key: 'fhir', label: 'FHIR JSON', icon: <CodeIcon /> },
 ];
 
 export function PatientDetails() {
@@ -35,12 +44,16 @@ export function PatientDetails() {
   const [activeTab, setActiveTab] = useState('summary');
   const [summaryState, setSummaryState] = useState({ status: 'loading', data: null, error: null });
   const [fhirState, setFhirState] = useState({ status: 'idle', data: null, error: null });
+  const { enqueueSnackbar } = useSnackbar();
 
   function loadSummary() {
     setSummaryState({ status: 'loading', data: null, error: null });
     getClinicalSummary(patientId)
       .then((data) => setSummaryState({ status: 'success', data, error: null }))
-      .catch((error) => setSummaryState({ status: 'error', data: null, error }));
+      .catch((error) => {
+        setSummaryState({ status: 'error', data: null, error });
+        enqueueSnackbar('Não foi possível carregar o prontuário.', { variant: 'error' });
+      });
   }
 
   useEffect(() => {
@@ -52,7 +65,10 @@ export function PatientDetails() {
     setFhirState({ status: 'loading', data: null, error: null });
     getFhirBundle(patientId)
       .then((data) => setFhirState({ status: 'success', data, error: null }))
-      .catch((error) => setFhirState({ status: 'error', data: null, error }));
+      .catch((error) => {
+        setFhirState({ status: 'error', data: null, error });
+        enqueueSnackbar('Não foi possível carregar o Bundle FHIR.', { variant: 'error' });
+      });
   }, [activeTab, fhirState.status, patientId]);
 
   if (summaryState.status === 'loading') return <LoadingState message="Carregando prontuário" />;
@@ -63,21 +79,26 @@ export function PatientDetails() {
 
   return (
     <Stack spacing={3}>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between">
-        <Box>
-          <Typography variant="h1">{protectedValue(patient.fullName)}</Typography>
-          <Typography color="text.secondary">{patient.patientId} · {genderLabel(patient.gender)} · {formatDate(patient.birthDate)}</Typography>
-        </Box>
-        <AccessLevelChip level={data.accessLevel} />
-      </Stack>
+      <PageHeader
+        title={protectedValue(patient.fullName)}
+        subtitle={`${patient.patientId} · ${genderLabel(patient.gender)} · ${formatDate(patient.birthDate)}`}
+        eyebrow="Prontuário clínico"
+        actions={<AccessLevelChip level={data.accessLevel} />}
+      />
 
       {data.accessLevel === 'PARTIAL' ? (
         <Alert severity="warning">Acesso parcial: campos identificadores foram removidos ou reduzidos pelo backend.</Alert>
       ) : null}
 
-      <Paper>
+      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' } }}>
+        <MetricCard title="Atendimentos" value={data.recentEncounters?.length || 0} description="Registros recentes disponíveis." />
+        <MetricCard title="Eventos clínicos" value={(data.diagnoses?.length || 0) + (data.exams?.length || 0) + (data.medications?.length || 0)} description="Diagnósticos, exames e medicamentos." />
+        <MetricCard title="Nível de acesso" value={data.accessLevel} description="Definido pelo backend nos contratos reais." />
+      </Box>
+
+      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
         <Tabs value={activeTab} onChange={(_, value) => setActiveTab(value)} variant="scrollable" scrollButtons="auto">
-          {tabs.map((tab) => <Tab key={tab.key} value={tab.key} label={tab.label} />)}
+          {tabs.map((tab) => <Tab key={tab.key} value={tab.key} label={tab.label} icon={tab.icon} iconPosition="start" />)}
         </Tabs>
       </Paper>
 
@@ -94,7 +115,7 @@ export function PatientDetails() {
 function SummaryTab({ data }) {
   const patient = data.patient;
   return (
-    <Paper sx={{ p: 3 }}>
+    <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', p: 3 }}>
       <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' } }}>
         <Info label="Nome" value={protectedValue(patient.fullName)} />
         <Info label="CPF" value={protectedValue(patient.cpf)} />
@@ -119,7 +140,7 @@ function Info({ label, value }) {
 function EncountersTable({ encounters }) {
   if (!encounters?.length) return <EmptyState />;
   return (
-    <Paper>
+    <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
       <Table>
         <TableHead>
           <TableRow>
@@ -145,7 +166,7 @@ function EncountersTable({ encounters }) {
 function EventsTable({ events }) {
   if (!events?.length) return <EmptyState />;
   return (
-    <Paper>
+    <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
       <Table>
         <TableHead>
           <TableRow>
@@ -174,7 +195,7 @@ function FhirTab({ state }) {
   if (state.status === 'loading' || state.status === 'idle') return <LoadingState message="Carregando FHIR" />;
   if (state.status === 'error') return <ErrorState message={state.error.message} />;
   return (
-    <Paper sx={{ p: 2 }}>
+    <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', p: 2 }}>
       <Typography variant="caption" color="text.secondary">Bundle FHIR R4</Typography>
       <Box component="pre" sx={{ bgcolor: '#0f172a', color: '#e2e8f0', borderRadius: 1, overflow: 'auto', p: 2, fontSize: 13 }}>
         {JSON.stringify(state.data.jsonPayload, null, 2)}
@@ -182,4 +203,3 @@ function FhirTab({ state }) {
     </Paper>
   );
 }
-

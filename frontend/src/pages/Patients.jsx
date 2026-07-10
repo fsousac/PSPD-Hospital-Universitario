@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
-  Box,
   Button,
+  InputAdornment,
   Paper,
   Stack,
   Table,
@@ -14,23 +14,30 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import { useSnackbar } from 'notistack';
 import { listPatients } from '../api/patients.js';
 import { AccessLevelChip } from '../components/AccessLevelChip.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
 import { LoadingState } from '../components/LoadingState.jsx';
+import { PageHeader } from '../components/PageHeader.jsx';
 import { formatDate, genderLabel, protectedValue } from '../utils/format.js';
 
 export function Patients() {
   const [state, setState] = useState({ status: 'loading', data: null, error: null });
   const [query, setQuery] = useState('');
+  const { enqueueSnackbar } = useSnackbar();
 
   function load() {
     setState({ status: 'loading', data: null, error: null });
     listPatients()
       .then((data) => setState({ status: 'success', data, error: null }))
-      .catch((error) => setState({ status: 'error', data: null, error }));
+      .catch((error) => {
+        setState({ status: 'error', data: null, error });
+        enqueueSnackbar('Não foi possível carregar a lista de pacientes.', { variant: 'error' });
+      });
   }
 
   useEffect(() => {
@@ -53,26 +60,38 @@ export function Patients() {
 
   return (
     <Stack spacing={3}>
-      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2}>
-        <Box>
-          <Typography variant="h1">Pacientes</Typography>
-          <Typography color="text.secondary">Pacientes disponíveis conforme vínculo e perfil autenticado.</Typography>
-        </Box>
-        <AccessLevelChip level={state.data?.accessLevel} />
-      </Stack>
+      <PageHeader
+        title="Pacientes"
+        subtitle="Pacientes disponíveis conforme vínculo e perfil autenticado."
+        actions={<AccessLevelChip level={state.data?.accessLevel} />}
+      />
 
       {state.data?.accessLevel === 'PARTIAL' ? (
         <Alert severity="warning">Seu acesso é parcial. Identificadores diretos podem estar ausentes.</Alert>
       ) : null}
 
-      <TextField
-        label="Buscar por ID, nome ou localidade"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        sx={{ maxWidth: 440 }}
-      />
+      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', p: 2 }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
+          <TextField
+            label="Buscar por ID, nome ou localidade"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            sx={{ maxWidth: 460, width: '100%' }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <Typography color="text.secondary" fontWeight={600}>
+            {filtered.length} de {patients.length} pacientes
+          </Typography>
+        </Stack>
+      </Paper>
 
-      <Paper>
+      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
         {filtered.length === 0 ? (
           <EmptyState title="Nenhum paciente encontrado" />
         ) : (
@@ -110,4 +129,3 @@ export function Patients() {
     </Stack>
   );
 }
-

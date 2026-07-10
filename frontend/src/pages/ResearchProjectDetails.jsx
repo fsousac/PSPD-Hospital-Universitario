@@ -12,6 +12,10 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
+import GroupsIcon from '@mui/icons-material/Groups';
+import InsightsIcon from '@mui/icons-material/Insights';
+import LockPersonIcon from '@mui/icons-material/LockPerson';
+import { useSnackbar } from 'notistack';
 import {
   Bar,
   BarChart,
@@ -27,18 +31,24 @@ import { AccessLevelChip } from '../components/AccessLevelChip.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
 import { LoadingState } from '../components/LoadingState.jsx';
+import { MetricCard } from '../components/MetricCard.jsx';
+import { PageHeader } from '../components/PageHeader.jsx';
 import { ProjectStatus } from './ResearchProjects.jsx';
 import { formatDate, genderLabel } from '../utils/format.js';
 
 export function ResearchProjectDetails() {
   const { projectId } = useParams();
   const [state, setState] = useState({ status: 'loading', project: null, aggregate: null, cohort: null, error: null });
+  const { enqueueSnackbar } = useSnackbar();
 
   function load() {
     setState({ status: 'loading', project: null, aggregate: null, cohort: null, error: null });
     Promise.all([getProject(projectId), getProjectAggregate(projectId), getProjectCohort(projectId)])
       .then(([project, aggregate, cohort]) => setState({ status: 'success', project, aggregate, cohort, error: null }))
-      .catch((error) => setState({ status: 'error', project: null, aggregate: null, cohort: null, error }));
+      .catch((error) => {
+        setState({ status: 'error', project: null, aggregate: null, cohort: null, error });
+        enqueueSnackbar('Não foi possível carregar os dados do projeto.', { variant: 'error' });
+      });
   }
 
   useEffect(() => {
@@ -52,30 +62,29 @@ export function ResearchProjectDetails() {
 
   return (
     <Stack spacing={3}>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between">
-        <Box>
-          <Typography variant="h1">{state.project.title}</Typography>
-          <Typography color="text.secondary">
-            {state.project.projectId} · {state.project.clinicalCondition} · {formatDate(state.project.validFrom)} até {formatDate(state.project.validUntil)}
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={1}>
+      <PageHeader
+        title={state.project.title}
+        subtitle={`${state.project.projectId} · ${state.project.clinicalCondition} · ${formatDate(state.project.validFrom)} até ${formatDate(state.project.validUntil)}`}
+        eyebrow="Projeto de pesquisa"
+        actions={(
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           <ProjectStatus status={state.project.status} />
           <AccessLevelChip level={state.aggregate.accessLevel} />
-        </Stack>
-      </Stack>
+          </Stack>
+        )}
+      />
 
       {!isApproved ? (
         <Alert severity="warning">Projeto sem status aprovado. A API real deve bloquear ou restringir estes dados.</Alert>
       ) : null}
 
       <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' } }}>
-        <Metric title="Total da coorte" value={state.aggregate.totalPatients} />
-        <Metric title="Nível estatístico" value={state.aggregate.accessLevel} />
-        <Metric title="Nível individual" value={state.cohort.accessLevel} />
+        <MetricCard title="Total da coorte" value={state.aggregate.totalPatients} icon={<GroupsIcon />} />
+        <MetricCard title="Nível estatístico" value={state.aggregate.accessLevel} icon={<InsightsIcon />} />
+        <MetricCard title="Nível individual" value={state.cohort.accessLevel} icon={<LockPersonIcon />} />
       </Box>
 
-      <Paper sx={{ p: 3 }}>
+      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', p: 3 }}>
         <Typography variant="h3" sx={{ mb: 2 }}>Distribuições agregadas</Typography>
         <Box sx={{ display: 'grid', gap: 3, gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' } }}>
           <Chart title="Idade" data={state.aggregate.ageDistribution} />
@@ -83,8 +92,10 @@ export function ResearchProjectDetails() {
         </Box>
       </Paper>
 
-      <Paper sx={{ p: 3 }}>
+      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+        <Box sx={{ p: 3, pb: 1 }}>
         <Typography variant="h3" sx={{ mb: 2 }}>Medicações frequentes</Typography>
+        </Box>
         <Table>
           <TableHead>
             <TableRow>
@@ -108,15 +119,6 @@ export function ResearchProjectDetails() {
   );
 }
 
-function Metric({ title, value }) {
-  return (
-    <Paper sx={{ p: 3 }}>
-      <Typography variant="caption" color="text.secondary">{title}</Typography>
-      <Typography variant="h2">{value}</Typography>
-    </Paper>
-  );
-}
-
 function Chart({ title, data }) {
   return (
     <Box sx={{ minWidth: 0 }}>
@@ -129,7 +131,7 @@ function Chart({ title, data }) {
             <YAxis domain={[0, 100]} />
             <Tooltip />
             <Legend />
-            <Bar dataKey="value" name="Percentual" fill="#0f766e" />
+            <Bar dataKey="value" name="Percentual" fill="#0f766e" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </Box>
@@ -140,7 +142,7 @@ function Chart({ title, data }) {
 function CohortTable({ cohort }) {
   const patients = cohort?.patients || [];
   return (
-    <Paper>
+    <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
       <Box sx={{ p: 3, pb: 0 }}>
         <Typography variant="h3">Coorte pseudonimizada</Typography>
         <Typography color="text.secondary">A tabela não deve conter nome, CPF, CNS, cidade ou ID real do paciente.</Typography>
@@ -172,4 +174,3 @@ function CohortTable({ cohort }) {
     </Paper>
   );
 }
-
