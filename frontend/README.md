@@ -1,18 +1,47 @@
 # frontend
 
-**Stack: a definir pelo grupo**
+SPA React + JavaScript + Vite para o projeto HU Observability.
 
-Responsabilidade: interface web para profissionais de saúde e pesquisadores
-acessarem prontuários eletrônicos. Autenticação delegada ao Keycloak via
-OIDC (redirect flow). Toda chamada de dados passa pelo API Gateway.
+## Stack
 
-## Funcionalidades esperadas
+- React
+- JavaScript
+- Vite
+- React Router
+- `keycloak-js`
+- Material UI
+- Recharts
+- `fetch` centralizado em `src/api/client.js`
+- Vitest + React Testing Library
+- MSW para mocks enquanto a API Gateway REST não estiver pronta
 
-- Login/logout via Keycloak
-- Listagem e busca de pacientes (conforme permissão do perfil)
-- Visualização de prontuário (FULL / PARTIAL / ANONYMIZED conforme `access_level` retornado pelo Authorization Service)
-- Painel de pesquisa com dados agregados (perfil pesquisador)
+## Execução local
 
-## Decisão de stack
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-Registrar ADR em `docs/decisions/` antes de criar qualquer arquivo de projeto aqui.
+Por padrão o frontend usa autenticação e API mockadas:
+
+```text
+VITE_AUTH_MODE=mock
+VITE_ENABLE_MOCKS=true
+```
+
+Perfis mockados podem ser alternados no dashboard ou pela query string:
+
+```text
+http://localhost:5173/?perfil=medico
+http://localhost:5173/?perfil=estagiario
+http://localhost:5173/?perfil=pesquisador
+```
+
+## Segurança
+
+- O frontend chama somente a API Gateway REST.
+- O frontend não chama serviços gRPC diretamente.
+- O JWT não é salvo em `localStorage`.
+- A autorização real, anonimização e agregação permanecem no backend.
+- Tokens e dados clínicos sensíveis não devem ser registrados em logs.
