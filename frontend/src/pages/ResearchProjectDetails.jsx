@@ -28,6 +28,7 @@ import {
 } from 'recharts';
 import { getProject, getProjectAggregate, getProjectCohort } from '../api/research.js';
 import { AccessLevelChip } from '../components/AccessLevelChip.jsx';
+import { DataTableShell } from '../components/DataTableShell.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
 import { LoadingState } from '../components/LoadingState.jsx';
@@ -92,11 +93,8 @@ export function ResearchProjectDetails() {
         </Box>
       </Paper>
 
-      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
-        <Box sx={{ p: 3, pb: 1 }}>
-        <Typography variant="h3" sx={{ mb: 2 }}>Medicações frequentes</Typography>
-        </Box>
-        <Table>
+      <DataTableShell title="Medicações frequentes" subtitle="Distribuição percentual na coorte agregada." minWidth={520}>
+        <Table aria-label="Medicações frequentes">
           <TableHead>
             <TableRow>
               <TableCell>Medicação</TableCell>
@@ -112,7 +110,7 @@ export function ResearchProjectDetails() {
             ))}
           </TableBody>
         </Table>
-      </Paper>
+      </DataTableShell>
 
       <CohortTable cohort={state.cohort} />
     </Stack>
@@ -142,15 +140,15 @@ function Chart({ title, data }) {
 function CohortTable({ cohort }) {
   const patients = cohort?.patients || [];
   return (
-    <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
-      <Box sx={{ p: 3, pb: 0 }}>
-        <Typography variant="h3">Coorte pseudonimizada</Typography>
-        <Typography color="text.secondary">A tabela não deve conter nome, CPF, CNS, cidade ou ID real do paciente.</Typography>
-      </Box>
+    <DataTableShell
+      title="Coorte pseudonimizada"
+      subtitle="A tabela não deve conter nome, CPF, CNS, cidade ou ID real do paciente."
+      minWidth={patients.length ? 700 : 0}
+    >
       {patients.length === 0 ? (
         <EmptyState />
       ) : (
-        <Table>
+        <Table aria-label="Coorte pseudonimizada">
           <TableHead>
             <TableRow>
               <TableCell>Pseudônimo</TableCell>
@@ -171,6 +169,6 @@ function CohortTable({ cohort }) {
           </TableBody>
         </Table>
       )}
-    </Paper>
+    </DataTableShell>
   );
 }

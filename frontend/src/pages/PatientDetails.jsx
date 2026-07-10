@@ -15,17 +15,23 @@ import {
   Typography,
 } from '@mui/material';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import BadgeIcon from '@mui/icons-material/Badge';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CodeIcon from '@mui/icons-material/Code';
 import MedicationIcon from '@mui/icons-material/Medication';
 import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
+import PlaceIcon from '@mui/icons-material/Place';
+import PersonIcon from '@mui/icons-material/Person';
 import ScienceIcon from '@mui/icons-material/Science';
 import { useSnackbar } from 'notistack';
 import { getClinicalSummary, getFhirBundle } from '../api/patients.js';
 import { AccessLevelChip } from '../components/AccessLevelChip.jsx';
+import { DataTableShell } from '../components/DataTableShell.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
 import { LoadingState } from '../components/LoadingState.jsx';
+import { InfoCard } from '../components/InfoCard.jsx';
+import { JsonViewer } from '../components/JsonViewer.jsx';
 import { MetricCard } from '../components/MetricCard.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { formatDate, genderLabel, protectedValue } from '../utils/format.js';
@@ -115,24 +121,13 @@ export function PatientDetails() {
 function SummaryTab({ data }) {
   const patient = data.patient;
   return (
-    <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', p: 3 }}>
-      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' } }}>
-        <Info label="Nome" value={protectedValue(patient.fullName)} />
-        <Info label="CPF" value={protectedValue(patient.cpf)} />
-        <Info label="CNS" value={protectedValue(patient.cns)} />
-        <Info label="Cidade" value={protectedValue(patient.city)} />
-        <Info label="Estado" value={protectedValue(patient.state)} />
-        <Info label="Nível" value={data.accessLevel} />
-      </Box>
-    </Paper>
-  );
-}
-
-function Info({ label, value }) {
-  return (
-    <Box>
-      <Typography variant="caption" color="text.secondary">{label}</Typography>
-      <Typography fontWeight={700}>{value}</Typography>
+    <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' } }}>
+      <InfoCard label="Nome" value={protectedValue(patient.fullName)} icon={<PersonIcon />} />
+      <InfoCard label="CPF" value={protectedValue(patient.cpf)} icon={<BadgeIcon />} />
+      <InfoCard label="CNS" value={protectedValue(patient.cns)} icon={<BadgeIcon />} />
+      <InfoCard label="Cidade" value={protectedValue(patient.city)} icon={<PlaceIcon />} />
+      <InfoCard label="Estado" value={protectedValue(patient.state)} icon={<PlaceIcon />} />
+      <InfoCard label="Nível de acesso" value={data.accessLevel} icon={<AssignmentIcon />} />
     </Box>
   );
 }
@@ -140,8 +135,8 @@ function Info({ label, value }) {
 function EncountersTable({ encounters }) {
   if (!encounters?.length) return <EmptyState />;
   return (
-    <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
-      <Table>
+    <DataTableShell title="Atendimentos recentes" minWidth={640}>
+      <Table aria-label="Atendimentos recentes">
         <TableHead>
           <TableRow>
             <TableCell>Data</TableCell>
@@ -159,15 +154,15 @@ function EncountersTable({ encounters }) {
           ))}
         </TableBody>
       </Table>
-    </Paper>
+    </DataTableShell>
   );
 }
 
 function EventsTable({ events }) {
   if (!events?.length) return <EmptyState />;
   return (
-    <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
-      <Table>
+    <DataTableShell title="Eventos clínicos" minWidth={720}>
+      <Table aria-label="Eventos clínicos">
         <TableHead>
           <TableRow>
             <TableCell>Data</TableCell>
@@ -187,19 +182,12 @@ function EventsTable({ events }) {
           ))}
         </TableBody>
       </Table>
-    </Paper>
+    </DataTableShell>
   );
 }
 
 function FhirTab({ state }) {
   if (state.status === 'loading' || state.status === 'idle') return <LoadingState message="Carregando FHIR" />;
   if (state.status === 'error') return <ErrorState message={state.error.message} />;
-  return (
-    <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', p: 2 }}>
-      <Typography variant="caption" color="text.secondary">Bundle FHIR R4</Typography>
-      <Box component="pre" sx={{ bgcolor: '#0f172a', color: '#e2e8f0', borderRadius: 1, overflow: 'auto', p: 2, fontSize: 13 }}>
-        {JSON.stringify(state.data.jsonPayload, null, 2)}
-      </Box>
-    </Paper>
-  );
+  return <JsonViewer title="Bundle FHIR R4" data={state.data.jsonPayload} />;
 }

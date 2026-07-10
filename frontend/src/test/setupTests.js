@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { afterAll, afterEach, beforeAll, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { server } from './server.js';
 
 beforeAll(() => {
@@ -21,10 +21,9 @@ globalThis.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation((query) => ({
-    matches: false,
+function mediaQueryResult(query, matches) {
+  return {
+    matches,
     media: query,
     onchange: null,
     addListener: vi.fn(),
@@ -32,5 +31,14 @@ Object.defineProperty(window, 'matchMedia', {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
     dispatchEvent: vi.fn(),
-  })),
+  };
+}
+
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn(),
+});
+
+beforeEach(() => {
+  window.matchMedia.mockImplementation((query) => mediaQueryResult(query, query.includes('min-width:1200px')));
 });

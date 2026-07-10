@@ -3,7 +3,6 @@ import { Link as RouterLink } from 'react-router-dom';
 import {
   Button,
   Chip,
-  Paper,
   Stack,
   Table,
   TableBody,
@@ -16,6 +15,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useSnackbar } from 'notistack';
 import { listProjects } from '../api/research.js';
 import { EmptyState } from '../components/EmptyState.jsx';
+import { DataTableShell } from '../components/DataTableShell.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
 import { LoadingState } from '../components/LoadingState.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
@@ -52,11 +52,15 @@ export function ResearchProjects() {
         actions={<Typography color="text.secondary" fontWeight={600}>{projects.length} projetos</Typography>}
       />
 
-      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+      <DataTableShell
+        title="Projetos autorizados"
+        subtitle="Consulte condição clínica, vigência e situação de cada projeto."
+        minWidth={projects.length ? 820 : 0}
+      >
         {projects.length === 0 ? (
           <EmptyState title="Nenhum projeto disponível" />
         ) : (
-          <Table>
+          <Table aria-label="Lista de projetos de pesquisa">
             <TableHead>
               <TableRow>
                 <TableCell>Projeto</TableCell>
@@ -86,7 +90,7 @@ export function ResearchProjects() {
             </TableBody>
           </Table>
         )}
-      </Paper>
+      </DataTableShell>
     </Stack>
   );
 }

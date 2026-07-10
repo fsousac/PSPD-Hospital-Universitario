@@ -44,6 +44,7 @@ import { MetricCard } from '../components/MetricCard.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { SectionPanel } from '../components/SectionPanel.jsx';
 import { StatusBadge } from '../components/StatusBadge.jsx';
+import { TimelineList } from '../components/TimelineList.jsx';
 
 const environmentBannerKey = 'hu_dashboard_environment_banner_closed';
 
@@ -178,7 +179,8 @@ export function Dashboard() {
 
         <Box sx={{ display: 'grid', gap: 3, gridTemplateColumns: { xs: '1fr', xl: '1.5fr 1fr' } }}>
           <SectionPanel title="Últimos Pacientes" subtitle="Pacientes com movimentações recentes">
-            <Table>
+            <Box sx={{ maxWidth: '100%', overflowX: 'auto' }}>
+            <Table aria-label="Últimos pacientes" sx={{ minWidth: 720 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Nome</TableCell>
@@ -216,36 +218,11 @@ export function Dashboard() {
                 </TableRow>
               </TableFooter>
             </Table>
+            </Box>
           </SectionPanel>
 
           <SectionPanel title="Feed de Atividades" subtitle="Últimas ações registradas no ambiente mockado">
-            <Stack spacing={2}>
-              {activities.map((activity) => (
-                <Stack key={`${activity.description}-${activity.time}`} direction="row" spacing={1.5} alignItems="flex-start">
-                  <Box
-                    sx={{
-                      alignItems: 'center',
-                      bgcolor: 'background.default',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                      color: activity.color,
-                      display: 'flex',
-                      flexShrink: 0,
-                      height: 38,
-                      justifyContent: 'center',
-                      width: 38,
-                    }}
-                  >
-                    {activity.icon}
-                  </Box>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography fontWeight={700}>{activity.description}</Typography>
-                    <Typography variant="body2" color="text.secondary">{activity.time}</Typography>
-                  </Box>
-                </Stack>
-              ))}
-            </Stack>
+            <TimelineList items={activities} />
           </SectionPanel>
         </Box>
       </Stack>

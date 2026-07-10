@@ -74,12 +74,34 @@ export const theme = createTheme({
     },
     MuiTableCell: {
       styleOverrides: {
+        root: {
+          borderColor: '#e5eaf0',
+          paddingBottom: 14,
+          paddingTop: 14,
+        },
         head: {
           backgroundColor: '#f8fafc',
           color: '#475569',
           fontSize: '0.75rem',
           fontWeight: 800,
           textTransform: 'uppercase',
+        },
+      },
+    },
+    MuiTableRow: {
+      styleOverrides: {
+        root: {
+          transition: 'background-color 140ms ease',
+          '&:last-child td': {
+            borderBottom: 0,
+          },
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        label: {
+          fontWeight: 700,
         },
       },
     },

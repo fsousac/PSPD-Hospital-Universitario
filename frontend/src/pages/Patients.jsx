@@ -4,7 +4,6 @@ import {
   Alert,
   Button,
   InputAdornment,
-  Paper,
   Stack,
   Table,
   TableBody,
@@ -19,10 +18,12 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useSnackbar } from 'notistack';
 import { listPatients } from '../api/patients.js';
 import { AccessLevelChip } from '../components/AccessLevelChip.jsx';
+import { DataTableShell } from '../components/DataTableShell.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
 import { LoadingState } from '../components/LoadingState.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
+import { PageToolbar } from '../components/PageToolbar.jsx';
 import { formatDate, genderLabel, protectedValue } from '../utils/format.js';
 
 export function Patients() {
@@ -70,8 +71,13 @@ export function Patients() {
         <Alert severity="warning">Seu acesso é parcial. Identificadores diretos podem estar ausentes.</Alert>
       ) : null}
 
-      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', p: 2 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
+      <PageToolbar
+        summary={(
+          <Typography color="text.secondary" fontWeight={700} sx={{ whiteSpace: 'nowrap' }}>
+            {filtered.length} de {patients.length} pacientes
+          </Typography>
+        )}
+      >
           <TextField
             label="Buscar por ID, nome ou localidade"
             value={query}
@@ -85,17 +91,13 @@ export function Patients() {
               ),
             }}
           />
-          <Typography color="text.secondary" fontWeight={600}>
-            {filtered.length} de {patients.length} pacientes
-          </Typography>
-        </Stack>
-      </Paper>
+      </PageToolbar>
 
-      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+      <DataTableShell minWidth={filtered.length ? 760 : 0}>
         {filtered.length === 0 ? (
           <EmptyState title="Nenhum paciente encontrado" />
         ) : (
-          <Table>
+          <Table aria-label="Lista de pacientes">
             <TableHead>
               <TableRow>
                 <TableCell>Paciente</TableCell>
@@ -125,7 +127,7 @@ export function Patients() {
             </TableBody>
           </Table>
         )}
-      </Paper>
+      </DataTableShell>
     </Stack>
   );
 }
