@@ -115,9 +115,27 @@ services:
   # api-gateway:
   #   ...
 
-  # TODO: adicionar frontend após definição de stack
-  # frontend:
-  #   ...
+  frontend:
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8088/api
+        VITE_AUTH_MODE: mock
+        VITE_ENABLE_MOCKS: "true"
+        VITE_KEYCLOAK_URL: http://localhost:8180
+        VITE_KEYCLOAK_REALM: hu
+        VITE_KEYCLOAK_CLIENT_ID: hu-frontend
+    container_name: hu-frontend
+    restart: unless-stopped
+    ports:
+      - "8088:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   postgres_data:
