@@ -1,6 +1,6 @@
 import { Box, Paper, Stack, Typography } from '@mui/material';
 
-export function DataTableShell({ title, subtitle, actions, children, minWidth = 720 }) {
+export function DataTableShell({ title, subtitle, actions, children, footer, minWidth = 720 }) {
   return (
     <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
       {title || subtitle || actions ? (
@@ -21,6 +21,7 @@ export function DataTableShell({ title, subtitle, actions, children, minWidth = 
       <Box sx={{ maxWidth: '100%', overflowX: 'auto' }}>
         <Box sx={{ minWidth }}>{children}</Box>
       </Box>
+      {footer ? <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>{footer}</Box> : null}
     </Paper>
   );
 }

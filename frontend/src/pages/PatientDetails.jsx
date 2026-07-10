@@ -1,16 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Paper,
   Stack,
   Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   Tabs,
   Typography,
 } from '@mui/material';
@@ -26,15 +20,17 @@ import ScienceIcon from '@mui/icons-material/Science';
 import { useSnackbar } from 'notistack';
 import { getClinicalSummary, getFhirBundle } from '../api/patients.js';
 import { AccessLevelChip } from '../components/AccessLevelChip.jsx';
-import { DataTableShell } from '../components/DataTableShell.jsx';
+import { ClinicalSafetyPanel } from '../components/ClinicalSafetyPanel.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
 import { LoadingState } from '../components/LoadingState.jsx';
 import { InfoCard } from '../components/InfoCard.jsx';
 import { JsonViewer } from '../components/JsonViewer.jsx';
 import { MetricCard } from '../components/MetricCard.jsx';
+import { OperationalTable } from '../components/OperationalTable.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { formatDate, genderLabel, protectedValue } from '../utils/format.js';
+import { reportAuditSignal } from '../observability/telemetry.js';
 
 const tabs = [
   { key: 'summary', label: 'Resumo clínico', icon: <AssignmentIcon /> },
@@ -63,11 +59,13 @@ export function PatientDetails() {
   }
 
   useEffect(() => {
+    reportAuditSignal('clinical_record_opened');
     loadSummary();
   }, [patientId]);
 
   useEffect(() => {
     if (activeTab !== 'fhir' || fhirState.status !== 'idle') return;
+    reportAuditSignal('fhir_viewed');
     setFhirState({ status: 'loading', data: null, error: null });
     getFhirBundle(patientId)
       .then((data) => setFhirState({ status: 'success', data, error: null }))
@@ -78,7 +76,7 @@ export function PatientDetails() {
   }, [activeTab, fhirState.status, patientId]);
 
   if (summaryState.status === 'loading') return <LoadingState message="Carregando prontuário" />;
-  if (summaryState.status === 'error') return <ErrorState message={summaryState.error.message} onRetry={loadSummary} />;
+  if (summaryState.status === 'error') return <ErrorState message={summaryState.error.message} correlationId={summaryState.error.correlationId} onRetry={loadSummary} />;
 
   const data = summaryState.data;
   const patient = data.patient;
@@ -92,9 +90,7 @@ export function PatientDetails() {
         actions={<AccessLevelChip level={data.accessLevel} />}
       />
 
-      {data.accessLevel === 'PARTIAL' ? (
-        <Alert severity="warning">Acesso parcial: campos identificadores foram removidos ou reduzidos pelo backend.</Alert>
-      ) : null}
+      <ClinicalSafetyPanel accessLevel={data.accessLevel} events={[...(data.diagnoses || []), ...(data.exams || []), ...(data.medications || [])]} />
 
       <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' } }}>
         <MetricCard title="Atendimentos" value={data.recentEncounters?.length || 0} description="Registros recentes disponíveis." />
@@ -135,59 +131,46 @@ function SummaryTab({ data }) {
 function EncountersTable({ encounters }) {
   if (!encounters?.length) return <EmptyState />;
   return (
-    <DataTableShell title="Atendimentos recentes" minWidth={640}>
-      <Table aria-label="Atendimentos recentes">
-        <TableHead>
-          <TableRow>
-            <TableCell>Data</TableCell>
-            <TableCell>Tipo</TableCell>
-            <TableCell>Departamento</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {encounters.map((encounter) => (
-            <TableRow key={encounter.encounterId}>
-              <TableCell>{formatDate(encounter.startDate)}</TableCell>
-              <TableCell>{encounter.type}</TableCell>
-              <TableCell>{encounter.department}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </DataTableShell>
+    <OperationalTable
+      ariaLabel="Atendimentos recentes"
+      title="Atendimentos recentes"
+      subtitle="Histórico ordenável conforme os registros recebidos."
+      rows={encounters}
+      getRowId={(encounter) => encounter.encounterId}
+      initialOrderBy="startDate"
+      minWidth={640}
+      columns={[
+        { id: 'startDate', label: 'Data', sortable: true, render: (encounter) => formatDate(encounter.startDate) },
+        { id: 'type', label: 'Tipo', sortable: true },
+        { id: 'department', label: 'Departamento', sortable: true },
+      ]}
+    />
   );
 }
 
 function EventsTable({ events }) {
   if (!events?.length) return <EmptyState />;
   return (
-    <DataTableShell title="Eventos clínicos" minWidth={720}>
-      <Table aria-label="Eventos clínicos">
-        <TableHead>
-          <TableRow>
-            <TableCell>Data</TableCell>
-            <TableCell>Código</TableCell>
-            <TableCell>Descrição</TableCell>
-            <TableCell>Valor</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {events.map((event) => (
-            <TableRow key={event.eventId}>
-              <TableCell>{formatDate(event.eventDate)}</TableCell>
-              <TableCell>{event.eventCode}</TableCell>
-              <TableCell>{event.description}</TableCell>
-              <TableCell>{[event.value, event.unit].filter(Boolean).join(' ') || 'Não informado'}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </DataTableShell>
+    <OperationalTable
+      ariaLabel="Eventos clínicos"
+      title="Eventos clínicos"
+      subtitle="Resultados críticos só são destacados quando sinalizados explicitamente pela fonte."
+      rows={events}
+      getRowId={(event) => event.eventId}
+      initialOrderBy="eventDate"
+      minWidth={760}
+      columns={[
+        { id: 'eventDate', label: 'Data', sortable: true, render: (event) => formatDate(event.eventDate) },
+        { id: 'eventCode', label: 'Código', sortable: true },
+        { id: 'description', label: 'Descrição', sortable: true, minWidth: 220 },
+        { id: 'value', label: 'Valor', sortable: true, render: (event) => [event.value, event.unit].filter(Boolean).join(' ') || 'Não informado' },
+      ]}
+    />
   );
 }
 
 function FhirTab({ state }) {
   if (state.status === 'loading' || state.status === 'idle') return <LoadingState message="Carregando FHIR" />;
-  if (state.status === 'error') return <ErrorState message={state.error.message} />;
+  if (state.status === 'error') return <ErrorState message={state.error.message} correlationId={state.error.correlationId} />;
   return <JsonViewer title="Bundle FHIR R4" data={state.data.jsonPayload} />;
 }

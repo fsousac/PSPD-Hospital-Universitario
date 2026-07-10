@@ -1,13 +1,18 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { LoadingState } from '../components/LoadingState.jsx';
+import { ErrorState } from '../components/ErrorState.jsx';
 import { useAuth } from './AuthProvider.jsx';
 
 export function ProtectedRoute({ allowedRoles }) {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, isError, user } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
     return <LoadingState message="Validando sessão" />;
+  }
+
+  if (isError) {
+    return <ErrorState message="Não foi possível validar a sessão com o provedor de identidade." onRetry={() => window.location.reload()} />;
   }
 
   if (!isAuthenticated) {
@@ -20,4 +25,3 @@ export function ProtectedRoute({ allowedRoles }) {
 
   return <Outlet />;
 }
-

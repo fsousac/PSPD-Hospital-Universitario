@@ -5,11 +5,6 @@ import {
   Box,
   Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   Typography,
 } from '@mui/material';
 import GroupsIcon from '@mui/icons-material/Groups';
@@ -28,14 +23,14 @@ import {
 } from 'recharts';
 import { getProject, getProjectAggregate, getProjectCohort } from '../api/research.js';
 import { AccessLevelChip } from '../components/AccessLevelChip.jsx';
-import { DataTableShell } from '../components/DataTableShell.jsx';
-import { EmptyState } from '../components/EmptyState.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
 import { LoadingState } from '../components/LoadingState.jsx';
 import { MetricCard } from '../components/MetricCard.jsx';
+import { OperationalTable } from '../components/OperationalTable.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { ProjectStatus } from './ResearchProjects.jsx';
 import { formatDate, genderLabel } from '../utils/format.js';
+import { reportAuditSignal } from '../observability/telemetry.js';
 
 export function ResearchProjectDetails() {
   const { projectId } = useParams();
@@ -53,11 +48,12 @@ export function ResearchProjectDetails() {
   }
 
   useEffect(() => {
+    reportAuditSignal('research_project_opened');
     load();
   }, [projectId]);
 
   if (state.status === 'loading') return <LoadingState message="Carregando projeto" />;
-  if (state.status === 'error') return <ErrorState message={state.error.message} onRetry={load} />;
+  if (state.status === 'error') return <ErrorState message={state.error.message} correlationId={state.error.correlationId} onRetry={load} />;
 
   const isApproved = state.project.status === 'Aprovado';
 
@@ -93,24 +89,19 @@ export function ResearchProjectDetails() {
         </Box>
       </Paper>
 
-      <DataTableShell title="Medicações frequentes" subtitle="Distribuição percentual na coorte agregada." minWidth={520}>
-        <Table aria-label="Medicações frequentes">
-          <TableHead>
-            <TableRow>
-              <TableCell>Medicação</TableCell>
-              <TableCell>Percentual</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {state.aggregate.medications.map((item) => (
-              <TableRow key={item.medication}>
-                <TableCell>{item.medication}</TableCell>
-                <TableCell>{item.percentage}%</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </DataTableShell>
+      <OperationalTable
+        ariaLabel="Medicações frequentes"
+        title="Medicações frequentes"
+        subtitle="Distribuição percentual na coorte agregada."
+        rows={state.aggregate.medications}
+        getRowId={(item) => item.medication}
+        initialOrderBy="percentage"
+        minWidth={520}
+        columns={[
+          { id: 'medication', label: 'Medicação', sortable: true },
+          { id: 'percentage', label: 'Percentual', sortable: true, render: (item) => `${item.percentage}%` },
+        ]}
+      />
 
       <CohortTable cohort={state.cohort} />
     </Stack>
@@ -121,7 +112,7 @@ function Chart({ title, data }) {
   return (
     <Box sx={{ minWidth: 0 }}>
       <Typography fontWeight={700} sx={{ mb: 1 }}>{title}</Typography>
-      <Box sx={{ height: 260 }}>
+      <Box role="img" aria-label={`Gráfico de distribuição por ${title.toLowerCase()}: ${data.map((item) => `${item.name}, ${item.value}%`).join('; ')}`} sx={{ height: 260 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -140,35 +131,21 @@ function Chart({ title, data }) {
 function CohortTable({ cohort }) {
   const patients = cohort?.patients || [];
   return (
-    <DataTableShell
+    <OperationalTable
+      ariaLabel="Coorte pseudonimizada"
       title="Coorte pseudonimizada"
       subtitle="A tabela não deve conter nome, CPF, CNS, cidade ou ID real do paciente."
-      minWidth={patients.length ? 700 : 0}
-    >
-      {patients.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <Table aria-label="Coorte pseudonimizada">
-          <TableHead>
-            <TableRow>
-              <TableCell>Pseudônimo</TableCell>
-              <TableCell>Faixa etária</TableCell>
-              <TableCell>Gênero</TableCell>
-              <TableCell>Condição</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {patients.map((patient) => (
-              <TableRow key={patient.pseudonymId}>
-                <TableCell>{patient.pseudonymId}</TableCell>
-                <TableCell>{patient.ageRange}</TableCell>
-                <TableCell>{genderLabel(patient.gender)}</TableCell>
-                <TableCell>{patient.condition}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
-    </DataTableShell>
+      rows={patients}
+      getRowId={(patient) => patient.pseudonymId}
+      initialOrderBy="pseudonymId"
+      emptyTitle="Nenhum participante na coorte"
+      minWidth={700}
+      columns={[
+        { id: 'pseudonymId', label: 'Pseudônimo', sortable: true },
+        { id: 'ageRange', label: 'Faixa etária', sortable: true },
+        { id: 'gender', label: 'Gênero', sortable: true, render: (patient) => genderLabel(patient.gender) },
+        { id: 'condition', label: 'Condição', sortable: true },
+      ]}
+    />
   );
 }

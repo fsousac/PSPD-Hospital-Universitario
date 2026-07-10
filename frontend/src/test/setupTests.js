@@ -1,6 +1,9 @@
 import '@testing-library/jest-dom/vitest';
+import { configure } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { server } from './server.js';
+
+configure({ asyncUtilTimeout: 5000 });
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });

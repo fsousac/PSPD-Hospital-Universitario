@@ -1,39 +1,42 @@
 import { createTheme } from '@mui/material/styles';
+import { brandTokens } from './tokens.js';
+
+const { colors, radius, layout } = brandTokens;
 
 export const theme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#0f766e',
-      dark: '#115e59',
-      light: '#5eead4',
+      main: colors.clinicalTeal,
+      dark: colors.clinicalTealDark,
+      light: colors.clinicalTealLight,
     },
     secondary: {
-      main: '#475569',
+      main: colors.institutionalNavy,
     },
     info: {
-      main: '#2563eb',
+      main: colors.informationBlue,
     },
     background: {
-      default: '#f4f7fb',
-      paper: '#ffffff',
+      default: colors.canvas,
+      paper: colors.surface,
     },
     text: {
-      primary: '#102033',
-      secondary: '#607086',
+      primary: colors.text,
+      secondary: colors.textMuted,
     },
     error: {
-      main: '#b42318',
+      main: colors.criticalRed,
     },
     warning: {
-      main: '#b7791f',
+      main: colors.attentionAmber,
     },
     success: {
-      main: '#15803d',
+      main: colors.successGreen,
     },
   },
   shape: {
-    borderRadius: 8,
+    borderRadius: radius.surface,
   },
   typography: {
     fontFamily: ['Roboto', 'Arial', 'sans-serif'].join(','),
@@ -44,6 +47,39 @@ export const theme = createTheme({
     button: { textTransform: 'none', fontWeight: 600 },
   },
   components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        html: {
+          scrollBehavior: 'smooth',
+        },
+        body: {
+          minWidth: 320,
+        },
+        '.visually-hidden': {
+          border: 0,
+          clip: 'rect(0 0 0 0)',
+          height: 1,
+          margin: -1,
+          overflow: 'hidden',
+          padding: 0,
+          position: 'absolute',
+          whiteSpace: 'nowrap',
+          width: 1,
+        },
+        '*:focus-visible': {
+          outline: `3px solid ${colors.informationBlue}`,
+          outlineOffset: 2,
+        },
+        '@media (prefers-reduced-motion: reduce)': {
+          '*, *::before, *::after': {
+            animationDuration: '0.01ms !important',
+            animationIterationCount: '1 !important',
+            scrollBehavior: 'auto !important',
+            transitionDuration: '0.01ms !important',
+          },
+        },
+      },
+    },
     MuiAlert: {
       styleOverrides: {
         root: {
@@ -54,7 +90,8 @@ export const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 6,
+          borderRadius: radius.control,
+          minHeight: layout.touchTarget,
         },
       },
     },
@@ -75,13 +112,13 @@ export const theme = createTheme({
     MuiTableCell: {
       styleOverrides: {
         root: {
-          borderColor: '#e5eaf0',
+          borderColor: colors.border,
           paddingBottom: 14,
           paddingTop: 14,
         },
         head: {
-          backgroundColor: '#f8fafc',
-          color: '#475569',
+          backgroundColor: '#EAF0F5',
+          color: colors.institutionalNavy,
           fontSize: '0.75rem',
           fontWeight: 800,
           textTransform: 'uppercase',
@@ -102,6 +139,21 @@ export const theme = createTheme({
       styleOverrides: {
         label: {
           fontWeight: 700,
+        },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          minHeight: layout.touchTarget,
+          minWidth: layout.touchTarget,
+        },
+      },
+    },
+    MuiTab: {
+      styleOverrides: {
+        root: {
+          minHeight: 48,
         },
       },
     },
