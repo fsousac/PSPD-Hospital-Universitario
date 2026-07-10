@@ -2,7 +2,7 @@ import { Box, CircularProgress, Paper, Skeleton, Stack, Typography } from '@mui/
 
 export function LoadingState({ message = 'Carregando' }) {
   return (
-    <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden', p: 3 }}>
+    <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden', p: { xs: 2, md: 3 } }}>
       <Stack spacing={2.5}>
         <Box sx={{ alignItems: 'center', display: 'flex', gap: 2 }}>
           <CircularProgress size={24} />

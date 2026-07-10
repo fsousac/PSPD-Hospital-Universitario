@@ -1,4 +1,6 @@
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { vi } from 'vitest';
 import { renderApp } from '../test/test-utils.jsx';
 
 describe('AppRoutes', () => {
@@ -16,6 +18,26 @@ describe('AppRoutes', () => {
     expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Pesquisa/ })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Pacientes/ })).not.toBeInTheDocument();
+  });
+
+  it('opens navigation from the menu button on small screens', async () => {
+    const user = userEvent.setup();
+    window.matchMedia.mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    renderApp({ route: '/dashboard', profile: 'medico' });
+
+    expect(screen.queryByRole('link', { name: /Pacientes/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Abrir menu de navegação' }));
+    expect(screen.getByRole('link', { name: /Pacientes/ })).toBeInTheDocument();
   });
 
   it('redirects researchers away from patient routes', async () => {
@@ -38,4 +60,3 @@ describe('AppRoutes', () => {
     expect(within(page).getByText(/rota solicitada não existe/i)).toBeInTheDocument();
   });
 });
-

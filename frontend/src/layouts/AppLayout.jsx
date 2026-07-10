@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
 import {
   AppBar,
@@ -7,6 +8,7 @@ import {
   Chip,
   Divider,
   Drawer,
+  IconButton,
   List,
   ListItemButton,
   ListItemIcon,
@@ -20,6 +22,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import GroupsIcon from '@mui/icons-material/Groups';
 import ScienceIcon from '@mui/icons-material/Science';
 import LogoutIcon from '@mui/icons-material/Logout';
+import MenuIcon from '@mui/icons-material/Menu';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import { useTheme } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
@@ -32,7 +35,8 @@ export function AppLayout() {
   const { logout, user } = useAuth();
   const location = useLocation();
   const theme = useTheme();
-  const compact = useMediaQuery(theme.breakpoints.down('md'));
+  const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
+  const [mobileOpen, setMobileOpen] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
   const role = getPrimaryRole(user);
 
@@ -58,10 +62,18 @@ export function AppLayout() {
           bgcolor: 'rgba(255,255,255,0.9)',
           borderBottom: '1px solid',
           borderColor: 'divider',
-          zIndex: (appTheme) => appTheme.zIndex.drawer + 1,
+          zIndex: (appTheme) => appTheme.zIndex.drawer + (isDesktop ? 1 : 0),
         }}
       >
         <Toolbar sx={{ gap: 2, minHeight: { xs: 64, md: 72 } }}>
+          <IconButton
+            aria-label="Abrir menu de navegação"
+            edge="start"
+            onClick={() => setMobileOpen(true)}
+            sx={{ display: { lg: 'none' } }}
+          >
+            <MenuIcon />
+          </IconButton>
           <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexGrow: 1, minWidth: 0 }}>
             <Avatar variant="rounded" sx={{ bgcolor: 'primary.main', height: 40, width: 40 }}>
               HU
@@ -80,15 +92,18 @@ export function AppLayout() {
               <Typography variant="body2" fontWeight={700}>{user?.displayName}</Typography>
               <Typography variant="caption" color="text.secondary">{roleLabel(role)}</Typography>
             </Box>
-            <Button startIcon={<LogoutIcon />} variant="outlined" onClick={handleLogout} size={compact ? 'small' : 'medium'}>
-              {compact ? '' : 'Sair'}
+            <Button startIcon={<LogoutIcon />} variant="outlined" onClick={handleLogout} size="small">
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Sair</Box>
             </Button>
           </Stack>
         </Toolbar>
       </AppBar>
 
       <Drawer
-        variant="permanent"
+        variant={isDesktop ? 'permanent' : 'temporary'}
+        open={isDesktop || mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        ModalProps={{ keepMounted: true }}
         sx={{
           width: drawerWidth,
           flexShrink: 0,
@@ -98,6 +113,7 @@ export function AppLayout() {
             boxSizing: 'border-box',
             borderRight: '1px solid',
             borderColor: 'divider',
+            boxShadow: isDesktop ? 'none' : 8,
           },
         }}
       >
@@ -110,6 +126,7 @@ export function AppLayout() {
                 component={RouterLink}
                 to={item.path}
                 selected={location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)}
+                onClick={() => setMobileOpen(false)}
                 sx={{
                   borderRadius: 1,
                   mb: 0.5,
@@ -135,7 +152,16 @@ export function AppLayout() {
         </Box>
       </Drawer>
 
-      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, px: { xs: 2, md: 4 }, py: 3 }}>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          minWidth: 0,
+          px: { xs: 2, sm: 3, lg: 4 },
+          py: { xs: 2, md: 3 },
+          width: { xs: '100%', lg: `calc(100% - ${drawerWidth}px)` },
+        }}
+      >
         <Toolbar sx={{ minHeight: { xs: 64, md: 72 } }} />
         <Box sx={{ maxWidth: 1240, mx: 'auto' }}>
           <Outlet />
