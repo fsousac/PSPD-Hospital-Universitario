@@ -13,20 +13,26 @@ import {
   Typography,
 } from '@mui/material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import { useSnackbar } from 'notistack';
 import { listProjects } from '../api/research.js';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
 import { LoadingState } from '../components/LoadingState.jsx';
+import { PageHeader } from '../components/PageHeader.jsx';
 import { formatDate } from '../utils/format.js';
 
 export function ResearchProjects() {
   const [state, setState] = useState({ status: 'loading', data: null, error: null });
+  const { enqueueSnackbar } = useSnackbar();
 
   function load() {
     setState({ status: 'loading', data: null, error: null });
     listProjects()
       .then((data) => setState({ status: 'success', data, error: null }))
-      .catch((error) => setState({ status: 'error', data: null, error }));
+      .catch((error) => {
+        setState({ status: 'error', data: null, error });
+        enqueueSnackbar('Não foi possível carregar os projetos de pesquisa.', { variant: 'error' });
+      });
   }
 
   useEffect(() => {
@@ -40,12 +46,13 @@ export function ResearchProjects() {
 
   return (
     <Stack spacing={3}>
-      <Stack spacing={0.5}>
-        <Typography variant="h1">Projetos de pesquisa</Typography>
-        <Typography color="text.secondary">Projetos disponíveis conforme autorização do backend.</Typography>
-      </Stack>
+      <PageHeader
+        title="Projetos de pesquisa"
+        subtitle="Projetos disponíveis conforme autorização do backend."
+        actions={<Typography color="text.secondary" fontWeight={600}>{projects.length} projetos</Typography>}
+      />
 
-      <Paper>
+      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
         {projects.length === 0 ? (
           <EmptyState title="Nenhum projeto disponível" />
         ) : (
@@ -88,4 +95,3 @@ export function ProjectStatus({ status }) {
   const color = status === 'Aprovado' ? 'success' : status === 'Suspenso' ? 'warning' : 'default';
   return <Chip size="small" label={status} color={color} />;
 }
-
