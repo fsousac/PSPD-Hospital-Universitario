@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { env } from '../config/env.js';
 import { configureApiClient } from '../api/client.js';
 import { createKeycloakClient, keycloakInitOptions } from './keycloak.js';
@@ -125,7 +125,7 @@ export function AuthProvider({ children }) {
     getToken,
   }), [getToken, login, logout, status, user]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     configureApiClient({
       getToken,
       onUnauthorized: logout,
