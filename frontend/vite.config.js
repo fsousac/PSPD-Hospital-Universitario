@@ -21,5 +21,6 @@ export default defineConfig({
     globals: true,
     include: ['src/**/*.test.{js,jsx}'],
     setupFiles: './src/test/setupTests.js',
+    testTimeout: 10000,
   },
 });

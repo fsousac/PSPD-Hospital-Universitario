@@ -21,6 +21,18 @@ export function ClinicalSafetyPanel({ accessLevel, events = [] }) {
           Campos identificadores foram removidos ou reduzidos pelo backend. Não presuma que um campo ausente significa inexistência do dado.
         </Alert>
       ) : null}
+      {accessLevel === 'ANONYMIZED' ? (
+        <Alert severity="info">
+          <AlertTitle>Dados anonimizados</AlertTitle>
+          Os registros individuais foram pseudonimizados. Identificadores diretos não estão disponíveis neste contexto.
+        </Alert>
+      ) : null}
+      {accessLevel === 'AGGREGATED' ? (
+        <Alert severity="info">
+          <AlertTitle>Dados agregados</AlertTitle>
+          Os valores representam a população analisada e não devem ser interpretados como dados individuais.
+        </Alert>
+      ) : null}
     </Stack>
   );
 }

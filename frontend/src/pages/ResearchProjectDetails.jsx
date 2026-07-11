@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link as RouterLink, useParams } from 'react-router-dom';
 import {
   Alert,
+  Breadcrumbs,
   Box,
+  Button,
   Paper,
   Stack,
   Typography,
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import GroupsIcon from '@mui/icons-material/Groups';
 import InsightsIcon from '@mui/icons-material/Insights';
 import LockPersonIcon from '@mui/icons-material/LockPerson';
@@ -59,6 +62,12 @@ export function ResearchProjectDetails() {
 
   return (
     <Stack spacing={3}>
+      <Breadcrumbs aria-label="Navegação do projeto de pesquisa">
+        <Button component={RouterLink} to="/research/projects" startIcon={<ArrowBackIcon />} size="small">
+          Projetos de pesquisa
+        </Button>
+        <Typography color="text.secondary">{state.project.projectId}</Typography>
+      </Breadcrumbs>
       <PageHeader
         title={state.project.title}
         subtitle={`${state.project.projectId} · ${state.project.clinicalCondition} · ${formatDate(state.project.validFrom)} até ${formatDate(state.project.validUntil)}`}
@@ -74,6 +83,10 @@ export function ResearchProjectDetails() {
       {!isApproved ? (
         <Alert severity="warning">Projeto sem status aprovado. A API real deve bloquear ou restringir estes dados.</Alert>
       ) : null}
+
+      <Alert severity="info">
+        Os resultados desta área são agregados ou pseudonimizados. Identificadores diretos de pacientes não fazem parte deste fluxo.
+      </Alert>
 
       <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' } }}>
         <MetricCard title="Total da coorte" value={state.aggregate.totalPatients} icon={<GroupsIcon />} />

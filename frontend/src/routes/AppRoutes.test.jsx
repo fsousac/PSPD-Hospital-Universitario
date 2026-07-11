@@ -40,6 +40,18 @@ describe('AppRoutes', () => {
     expect(screen.getByRole('link', { name: /Pacientes/ })).toBeInTheDocument();
   });
 
+  it('opens the user menu with profile and logout actions', async () => {
+    const user = userEvent.setup();
+    renderApp({ route: '/dashboard', profile: 'medico' });
+
+    await screen.findByRole('heading', { name: 'Dashboard' });
+    await user.click(screen.getByRole('button', { name: 'Abrir menu do usuário' }));
+
+    expect(screen.getByRole('menuitem', { name: /Perfil: Médico/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Configurações/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Sair/ })).toBeInTheDocument();
+  });
+
   it('redirects researchers away from patient routes', async () => {
     renderApp({ route: '/patients', profile: 'pesquisador' });
 
