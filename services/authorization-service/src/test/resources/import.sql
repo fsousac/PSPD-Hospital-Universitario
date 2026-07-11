@@ -1,9 +1,9 @@
-INSERT INTO user_patient_assignments (username, patient_id, tipo_vinculo, status, created_at) VALUES
-    ('dr.silva', 'P000001', 'medico', 'ativo', now()),
-    ('dr.silva', 'P000002', 'medico', 'inativo', now()),
-    ('estagiario.ana', 'P000001', 'estagiario', 'ativo', now());
+INSERT INTO user_patient_assignments (assignment_id, username, patient_id, assignment_type, active) VALUES
+    ('A0000000001', 'dr.silva', 'P000001', 'ATTENDING', true),
+    ('A0000000002', 'dr.silva', 'P000002', 'ATTENDING', false),
+    ('A0000000003', 'estagiario.ana', 'P000001', 'TRAINEE', true);
 
-INSERT INTO projects (project_id, username, clinical_condition, status, valid_from, valid_until, created_at) VALUES
-    ('PRJ01', 'pesquisador.souza', 'diabetes_tipo_2', 'Aprovado', '2026-01-01', '2026-12-31', now()),
-    ('PRJ02', 'pesquisador.souza', 'hipertensao', 'Suspenso', '2026-01-01', '2026-12-31', now()),
-    ('PRJ03', 'pesquisador.lima', 'diabetes_tipo_2', 'Aprovado', '2024-01-01', '2024-12-31', now());
+INSERT INTO projects (project_id, title, researcher_username, target_condition_code, status, valid_until) VALUES
+    ('PRJ01', 'Fatores de risco em Diabetes Tipo 2', 'pesquisador.souza', 'DIABETES', 'APPROVED', '2026-12-31'),
+    ('PRJ02', 'Hipertensão em idosos', 'pesquisador.souza', 'HYPERTENSION', 'SUSPENDED', '2026-12-31'),
+    ('PRJ03', 'Diabetes Tipo 2 — coorte histórica', 'pesquisador.lima', 'DIABETES', 'APPROVED', '2024-12-31');

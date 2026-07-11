@@ -1,0 +1,54 @@
+{
+  "title": "HU - Data Transform Service (grupo10)",
+  "schemaVersion": 39,
+  "tags": ["hu-pspd", "grupo10", "data-transform-service"],
+  "timezone": "browser",
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Requisições gRPC por método/status",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(data_transform_grpc_requests_total{namespace=\"grupo-10\"}[1m])) by (method, status)",
+          "legendFormat": "{{method}} [{{status}}]"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Latência gRPC p50/p95/p99",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(data_transform_grpc_latency_seconds_bucket{namespace=\"grupo-10\"}[5m])) by (le, method))",
+          "legendFormat": "{{method}} p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(data_transform_grpc_latency_seconds_bucket{namespace=\"grupo-10\"}[5m])) by (le, method))",
+          "legendFormat": "{{method}} p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(data_transform_grpc_latency_seconds_bucket{namespace=\"grupo-10\"}[5m])) by (le, method))",
+          "legendFormat": "{{method}} p99"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Taxa de erro gRPC",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(data_transform_grpc_requests_total{namespace=\"grupo-10\", status=\"error\"}[1m])) / sum(rate(data_transform_grpc_requests_total{namespace=\"grupo-10\"}[1m]))",
+          "legendFormat": "taxa de erro"
+        }
+      ]
+    }
+  ]
+}

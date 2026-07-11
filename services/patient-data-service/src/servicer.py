@@ -110,14 +110,17 @@ class PatientDataServicer(pb2_grpc.PatientDataServiceServicer):
             async with get_session() as session:
                 t0 = time.perf_counter()
 
+                # carer_type vem do JWT (papel do Keycloak: "medico"/"estagiario"),
+                # diferente do valor da coluna assignment_type no banco
+                # ("ATTENDING"/"TRAINEE") — não é o mesmo vocabulário.
                 if request.carer_type == "estagiario":
                     supervisor_stmt = (
                         select(UserPatientAssignment.username)
                         .where(
                             and_(
                                 UserPatientAssignment.usuario_supervisor == request.username,
-                                UserPatientAssignment.tipo_vinculo == "medico",
-                                UserPatientAssignment.status == "ativo",
+                                UserPatientAssignment.tipo_vinculo == "ATTENDING",
+                                UserPatientAssignment.active.is_(True),
                             )
                         )
                     )
@@ -128,8 +131,8 @@ class PatientDataServicer(pb2_grpc.PatientDataServiceServicer):
                         .where(
                             and_(
                                 UserPatientAssignment.username.in_(supervisors),
-                                UserPatientAssignment.tipo_vinculo == "medico",
-                                UserPatientAssignment.status == "ativo",
+                                UserPatientAssignment.tipo_vinculo == "ATTENDING",
+                                UserPatientAssignment.active.is_(True),
                             )
                         )
                     )
@@ -139,8 +142,8 @@ class PatientDataServicer(pb2_grpc.PatientDataServiceServicer):
                         .where(
                             and_(
                                 UserPatientAssignment.username == request.username,
-                                UserPatientAssignment.tipo_vinculo == "medico",
-                                UserPatientAssignment.status == "ativo",
+                                UserPatientAssignment.tipo_vinculo == "ATTENDING",
+                                UserPatientAssignment.active.is_(True),
                             )
                         )
                     )
@@ -163,7 +166,7 @@ class PatientDataServicer(pb2_grpc.PatientDataServiceServicer):
                     .where(
                         and_(
                             ClinicalEvent.event_code == request.clinical_condition,
-                            ClinicalEvent.event_type == "Condição",
+                            ClinicalEvent.event_type == "CONDITION",
                         )
                     )
                     .distinct()
@@ -210,9 +213,9 @@ class PatientDataServicer(pb2_grpc.PatientDataServiceServicer):
 
                 DB_QUERY_DURATION.labels(query="get_clinical_summary").observe(time.perf_counter() - t0)
 
-            diagnoses = [_event_to_pb(ev) for ev in events if ev.event_type == "Condição"]
-            exams = [_event_to_pb(ev) for ev in events if ev.event_type == "Observação"]
-            meds = [_event_to_pb(ev) for ev in events if ev.event_type == "Medicação"]
+            diagnoses = [_event_to_pb(ev) for ev in events if ev.event_type == "CONDITION"]
+            exams = [_event_to_pb(ev) for ev in events if ev.event_type == "OBSERVATION"]
+            meds = [_event_to_pb(ev) for ev in events if ev.event_type == "MEDICATION"]
 
             return pb2.ClinicalSummaryRecord(
                 patient=_patient_to_pb(patient),

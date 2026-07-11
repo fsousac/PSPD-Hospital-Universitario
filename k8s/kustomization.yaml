@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Namespace do grupo 10 no cluster compartilhado (kubeconfig-grupo-10.yaml já
+# fixa o contexto nesse namespace, mas declarar aqui também deixa `kustomize
+# build` correto localmente).
+namespace: grupo-10
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: hu-pspd
+    includeSelectors: false
+
+resources:
+  - configmap.yaml
+  - api-gateway.yaml
+  - authorization-service.yaml
+  - patient-data-service.yaml
+  - data-transform-service.yaml
+  - ingress.yaml
+  - servicemonitors.yaml
+
+# O Secret hu-db-credentials NÃO é gerenciado por kustomize/git — é criado
+# manualmente com o valor real da senha:
+#   kubectl create secret generic hu-db-credentials -n grupo-10 \
+#     --from-env-file=k8s/secrets.env
+# (ver k8s/secrets.env.example)
+
+# hpa.yaml (4 HorizontalPodAutoscaler, um por serviço) fica FORA da lista de
+# resources acima de propósito: HPA competiria com o scale manual das fases
+# (a)-(c) da metodologia. Só aplicar na fase (d) (autoscaling):
+#   kubectl apply -f k8s/hpa.yaml -n grupo-10
+

@@ -1,0 +1,58 @@
+{
+  "title": "HU - Authorization Service (grupo10)",
+  "schemaVersion": 39,
+  "tags": ["hu-pspd", "grupo10", "authorization-service"],
+  "timezone": "browser",
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Decisões de autorização por resultado (allow/deny)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(authorization_requests_total{namespace=\"grupo-10\"}[1m])) by (result)",
+          "legendFormat": "{{result}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Latência da decisão de autorização (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(authorization_decision_duration_seconds_bucket{namespace=\"grupo-10\"}[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Memória JVM utilizada",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(jvm_memory_used_bytes{namespace=\"grupo-10\", area=\"heap\"}) by (pod)",
+          "legendFormat": "{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Uso de CPU do processo",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "process_cpu_usage{namespace=\"grupo-10\"}",
+          "legendFormat": "{{pod}}"
+        }
+      ]
+    }
+  ]
+}

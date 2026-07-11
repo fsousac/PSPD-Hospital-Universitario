@@ -43,7 +43,10 @@ public class TokenValidationService {
         JsonObject realmAccess = jwt.getClaim("realm_access");
         if (realmAccess != null && realmAccess.containsKey("roles")) {
             JsonArray rolesArray = realmAccess.getJsonArray("roles");
-            rolesArray.forEach(value -> roles.add(value.toString().replace("\"", "")));
+            // Normalizado para minúsculas: o realm "hu" local usa roles minúsculas,
+            // mas o realm compartilhado do cluster (grupoXX) provisiona MEDICO/
+            // ESTAGIARIO/PESQUISADOR em maiúsculas. Comparação é sempre lowercase.
+            rolesArray.forEach(value -> roles.add(value.toString().replace("\"", "").toLowerCase()));
         }
         return roles;
     }

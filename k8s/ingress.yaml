@@ -1,0 +1,25 @@
+# SUPOSIÇÃO A CONFIRMAR contra o cluster real antes do primeiro apply
+# (ver docs/decisions/0005-k8s-observability-design.md, seção Riscos):
+#   - que o controller é ingress-nginx (`kubectl get ingressclass`)
+#   - que o padrão de path-prefix por grupo é feito via rewrite-target,
+#     e não por uma convenção diferente já pré-configurada pelo cluster.
+# Só o api-gateway é exposto externamente — é o único ponto de entrada da
+# aplicação (frontend fora de escopo, ainda sem stack definida).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hu-gateway-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx # TODO: confirmar nome real da IngressClass
+  rules:
+    - http:
+        paths:
+          - path: /grupo10(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8000

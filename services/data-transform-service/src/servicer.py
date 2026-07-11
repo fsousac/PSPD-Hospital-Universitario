@@ -95,10 +95,13 @@ class DataTransformServicer(pb2_grpc.DataTransformServiceServicer):
                 for enc in encounters:
                     fhir_entries.append(fhir_mapper.encounter_to_fhir(enc))
 
+            # Valores reais de event_type são maiúsculos em inglês (CONDITION/
+            # OBSERVATION/MEDICATION) — schema confirmado ao vivo contra o
+            # Postgres do cluster, não os antigos valores em português.
             event_type_map = {
-                "Condição": "Condition",
-                "Observação": "Observation",
-                "Medicação": "MedicationRequest",
+                "CONDITION": "Condition",
+                "OBSERVATION": "Observation",
+                "MEDICATION": "MedicationRequest",
             }
             for ev in events:
                 fhir_type = event_type_map.get(ev.get("event_type", ""))

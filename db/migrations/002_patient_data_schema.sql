@@ -1,44 +1,53 @@
 -- Tabelas clínicas do Patient Data Service.
 -- Depende de 001_authorization_schema.sql (user_patient_assignments, projects).
+--
+-- Nomes de coluna e valores de enum replicam o schema real do cluster K8S
+-- (ver nota em 001_authorization_schema.sql).
 
 CREATE TABLE IF NOT EXISTS patients (
-    patient_id  VARCHAR(50)  PRIMARY KEY,
-    full_name   VARCHAR(200) NOT NULL,
+    patient_id  VARCHAR(20)  PRIMARY KEY,
+    full_name   VARCHAR(120) NOT NULL,
     birth_date  DATE         NOT NULL,
-    gender      VARCHAR(10)  NOT NULL CHECK (gender IN ('male', 'female', 'other')),
-    city        VARCHAR(100),
-    state       VARCHAR(50),
-    cpf         VARCHAR(14),
-    cns         VARCHAR(20)
+    gender      VARCHAR(20)  NOT NULL CHECK (gender IN ('male', 'female')),
+    city        VARCHAR(80)  NOT NULL,
+    state       CHAR(2)      NOT NULL,
+    cpf         VARCHAR(14)  NOT NULL,
+    cns         VARCHAR(20)  NOT NULL,
+    UNIQUE (cpf),
+    UNIQUE (cns)
 );
-
-CREATE INDEX IF NOT EXISTS idx_patients_cpf ON patients (cpf);
 
 CREATE TABLE IF NOT EXISTS encounters (
-    encounter_id VARCHAR(50)  PRIMARY KEY,
-    patient_id   VARCHAR(50)  NOT NULL REFERENCES patients(patient_id),
-    start_date   TIMESTAMPTZ  NOT NULL,
-    end_date     TIMESTAMPTZ,
-    type         VARCHAR(50)  NOT NULL,   -- Ambulatorial, Emergência, Internação, Retorno
-    department   VARCHAR(100)             -- Cardiologia, Endocrinologia, Pediatria...
+    encounter_id    VARCHAR(20)  PRIMARY KEY,
+    patient_id      VARCHAR(20)  NOT NULL REFERENCES patients(patient_id),
+    start_date      TIMESTAMP    NOT NULL,
+    end_date        TIMESTAMP,
+    encounter_type  VARCHAR(40)  NOT NULL CHECK (encounter_type IN
+                        ('AMBULATORIAL', 'EMERGENCY', 'INPATIENT', 'ICU', 'FOLLOW_UP', 'TELEHEALTH')),
+    department      VARCHAR(80)  NOT NULL CHECK (department IN
+                        ('CARDIOLOGY', 'ENDOCRINOLOGY', 'NEPHROLOGY', 'PULMONOLOGY', 'INTERNAL_MEDICINE',
+                         'EMERGENCY', 'ICU', 'PEDIATRICS', 'GERIATRICS', 'INFECTIOUS_DISEASES', 'SURGERY',
+                         'OBSTETRICS', 'ORTHOPEDICS', 'ONCOLOGY', 'TELEMEDICINE'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_encounters_patient ON encounters (patient_id, start_date DESC);
+CREATE INDEX IF NOT EXISTS idx_encounters_patient ON encounters (patient_id);
 
 CREATE TABLE IF NOT EXISTS clinical_events (
-    event_id     VARCHAR(50)   PRIMARY KEY,
-    patient_id   VARCHAR(50)   NOT NULL REFERENCES patients(patient_id),
-    encounter_id VARCHAR(50)   REFERENCES encounters(encounter_id),
-    event_type   VARCHAR(20)   NOT NULL CHECK (event_type IN ('Condição', 'Observação', 'Medicação')),
-    event_code   VARCHAR(100)  NOT NULL,  -- diabetes_tipo_2, HbA1c, Losartana...
-    description  VARCHAR(500),
-    event_date   TIMESTAMPTZ   NOT NULL,
-    value        DECIMAL(12,4),
-    unit         VARCHAR(50)
+    event_id      VARCHAR(20)   PRIMARY KEY,
+    patient_id    VARCHAR(20)   NOT NULL REFERENCES patients(patient_id),
+    encounter_id  VARCHAR(20)   NOT NULL REFERENCES encounters(encounter_id),
+    event_type    VARCHAR(30)   NOT NULL CHECK (event_type IN ('CONDITION', 'OBSERVATION', 'MEDICATION')),
+    code          VARCHAR(40)   NOT NULL,  -- DIABETES, HBA1C, METFORMIN...
+    description   VARCHAR(200)  NOT NULL,
+    value         VARCHAR(80),             -- texto livre (numérico ou qualitativo)
+    unit          VARCHAR(40),
+    event_date    TIMESTAMP     NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_events_patient      ON clinical_events (patient_id, event_date DESC);
-CREATE INDEX IF NOT EXISTS idx_events_code_type    ON clinical_events (event_code, event_type);
+CREATE INDEX IF NOT EXISTS idx_events_patient      ON clinical_events (patient_id);
+CREATE INDEX IF NOT EXISTS idx_events_encounter    ON clinical_events (encounter_id);
+CREATE INDEX IF NOT EXISTS idx_events_patient_type ON clinical_events (patient_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_events_type_code    ON clinical_events (event_type, code);
 
 -- ============================================================
 -- Seed de teste (10 pacientes + atendimentos + eventos clínicos)
@@ -59,47 +68,47 @@ INSERT INTO patients (patient_id, full_name, birth_date, gender, city, state, cp
 ON CONFLICT DO NOTHING;
 
 -- Atendimentos
-INSERT INTO encounters (encounter_id, patient_id, start_date, end_date, type, department) VALUES
-    ('ENC001', 'P000001', '2025-01-10 08:00:00-03', '2025-01-10 09:30:00-03', 'Ambulatorial', 'Endocrinologia'),
-    ('ENC002', 'P000001', '2024-07-15 14:00:00-03', '2024-07-15 15:00:00-03', 'Retorno',       'Endocrinologia'),
-    ('ENC003', 'P000002', '2025-02-20 10:00:00-03', '2025-02-20 11:00:00-03', 'Ambulatorial', 'Cardiologia'),
-    ('ENC004', 'P000003', '2025-03-05 09:00:00-03', '2025-03-06 12:00:00-03', 'Internação',    'Cardiologia'),
-    ('ENC005', 'P000004', '2025-04-12 08:30:00-03', '2025-04-12 10:00:00-03', 'Ambulatorial', 'Pediatria'),
-    ('ENC006', 'P000005', '2025-01-22 13:00:00-03', '2025-01-22 14:00:00-03', 'Retorno',       'Endocrinologia'),
-    ('ENC007', 'P000006', '2025-05-03 11:00:00-03', '2025-05-03 12:30:00-03', 'Ambulatorial', 'Endocrinologia'),
-    ('ENC008', 'P000007', '2025-06-18 08:00:00-03', '2025-06-19 08:00:00-03', 'Emergência',    'Cardiologia'),
-    ('ENC009', 'P000008', '2025-07-01 09:00:00-03', '2025-07-01 10:00:00-03', 'Ambulatorial', 'Ginecologia'),
-    ('ENC010', 'P000009', '2025-02-28 10:00:00-03', '2025-02-28 11:30:00-03', 'Retorno',       'Endocrinologia'),
-    ('ENC011', 'P000010', '2025-03-15 14:00:00-03', '2025-03-15 15:00:00-03', 'Ambulatorial', 'Cardiologia')
+INSERT INTO encounters (encounter_id, patient_id, start_date, end_date, encounter_type, department) VALUES
+    ('ENC001', 'P000001', '2025-01-10 08:00:00', '2025-01-10 09:30:00', 'AMBULATORIAL', 'ENDOCRINOLOGY'),
+    ('ENC002', 'P000001', '2024-07-15 14:00:00', '2024-07-15 15:00:00', 'FOLLOW_UP',    'ENDOCRINOLOGY'),
+    ('ENC003', 'P000002', '2025-02-20 10:00:00', '2025-02-20 11:00:00', 'AMBULATORIAL', 'CARDIOLOGY'),
+    ('ENC004', 'P000003', '2025-03-05 09:00:00', '2025-03-06 12:00:00', 'INPATIENT',    'CARDIOLOGY'),
+    ('ENC005', 'P000004', '2025-04-12 08:30:00', '2025-04-12 10:00:00', 'AMBULATORIAL', 'PEDIATRICS'),
+    ('ENC006', 'P000005', '2025-01-22 13:00:00', '2025-01-22 14:00:00', 'FOLLOW_UP',    'ENDOCRINOLOGY'),
+    ('ENC007', 'P000006', '2025-05-03 11:00:00', '2025-05-03 12:30:00', 'AMBULATORIAL', 'ENDOCRINOLOGY'),
+    ('ENC008', 'P000007', '2025-06-18 08:00:00', '2025-06-19 08:00:00', 'EMERGENCY',    'CARDIOLOGY'),
+    ('ENC009', 'P000008', '2025-07-01 09:00:00', '2025-07-01 10:00:00', 'AMBULATORIAL', 'OBSTETRICS'),
+    ('ENC010', 'P000009', '2025-02-28 10:00:00', '2025-02-28 11:30:00', 'FOLLOW_UP',    'ENDOCRINOLOGY'),
+    ('ENC011', 'P000010', '2025-03-15 14:00:00', '2025-03-15 15:00:00', 'AMBULATORIAL', 'CARDIOLOGY')
 ON CONFLICT DO NOTHING;
 
 -- Condições clínicas
-INSERT INTO clinical_events (event_id, patient_id, encounter_id, event_type, event_code, description, event_date, value, unit) VALUES
-    ('CE001', 'P000001', 'ENC001', 'Condição',   'diabetes_tipo_2',   'Diabetes Mellitus Tipo 2',           '2023-01-10 08:00:00-03', NULL,  NULL),
-    ('CE002', 'P000001', 'ENC002', 'Condição',   'hipertensao',        'Hipertensão Arterial Sistêmica',    '2024-07-15 14:00:00-03', NULL,  NULL),
-    ('CE003', 'P000003', 'ENC004', 'Condição',   'hipertensao',        'Hipertensão Arterial Sistêmica',    '2025-03-05 09:00:00-03', NULL,  NULL),
-    ('CE004', 'P000005', 'ENC006', 'Condição',   'diabetes_tipo_2',   'Diabetes Mellitus Tipo 2',           '2022-06-01 10:00:00-03', NULL,  NULL),
-    ('CE005', 'P000006', 'ENC007', 'Condição',   'diabetes_tipo_2',   'Diabetes Mellitus Tipo 2',           '2024-11-03 11:00:00-03', NULL,  NULL),
-    ('CE006', 'P000007', 'ENC008', 'Condição',   'hipertensao',        'Hipertensão Arterial Sistêmica',    '2025-06-18 08:00:00-03', NULL,  NULL),
-    ('CE007', 'P000009', 'ENC010', 'Condição',   'diabetes_tipo_2',   'Diabetes Mellitus Tipo 2',           '2021-09-10 10:00:00-03', NULL,  NULL),
-    ('CE008', 'P000010', 'ENC011', 'Condição',   'hipertensao',        'Hipertensão Arterial Sistêmica',    '2025-03-15 14:00:00-03', NULL,  NULL),
+INSERT INTO clinical_events (event_id, patient_id, encounter_id, event_type, code, description, event_date, value, unit) VALUES
+    ('CE001', 'P000001', 'ENC001', 'CONDITION', 'DIABETES',     'Diabetes Mellitus Tipo 2',        '2023-01-10 08:00:00', NULL, NULL),
+    ('CE002', 'P000001', 'ENC002', 'CONDITION', 'HYPERTENSION', 'Hipertensão Arterial Sistêmica',  '2024-07-15 14:00:00', NULL, NULL),
+    ('CE003', 'P000003', 'ENC004', 'CONDITION', 'HYPERTENSION', 'Hipertensão Arterial Sistêmica',  '2025-03-05 09:00:00', NULL, NULL),
+    ('CE004', 'P000005', 'ENC006', 'CONDITION', 'DIABETES',     'Diabetes Mellitus Tipo 2',        '2022-06-01 10:00:00', NULL, NULL),
+    ('CE005', 'P000006', 'ENC007', 'CONDITION', 'DIABETES',     'Diabetes Mellitus Tipo 2',        '2024-11-03 11:00:00', NULL, NULL),
+    ('CE006', 'P000007', 'ENC008', 'CONDITION', 'HYPERTENSION', 'Hipertensão Arterial Sistêmica',  '2025-06-18 08:00:00', NULL, NULL),
+    ('CE007', 'P000009', 'ENC010', 'CONDITION', 'DIABETES',     'Diabetes Mellitus Tipo 2',        '2021-09-10 10:00:00', NULL, NULL),
+    ('CE008', 'P000010', 'ENC011', 'CONDITION', 'HYPERTENSION', 'Hipertensão Arterial Sistêmica',  '2025-03-15 14:00:00', NULL, NULL),
     -- Observações / exames laboratoriais
-    ('CE009', 'P000001', 'ENC001', 'Observação', 'HbA1c',             'Hemoglobina Glicada',               '2025-01-10 08:30:00-03', 8.1,   '%'),
-    ('CE010', 'P000001', 'ENC001', 'Observação', 'glicemia_jejum',    'Glicemia em Jejum',                 '2025-01-10 08:30:00-03', 182.0, 'mg/dL'),
-    ('CE011', 'P000001', 'ENC001', 'Observação', 'pressao_arterial',  'Pressão Arterial Sistólica',        '2025-01-10 08:30:00-03', 150.0, 'mmHg'),
-    ('CE012', 'P000003', 'ENC004', 'Observação', 'pressao_arterial',  'Pressão Arterial Sistólica',        '2025-03-05 09:30:00-03', 165.0, 'mmHg'),
-    ('CE013', 'P000005', 'ENC006', 'Observação', 'HbA1c',             'Hemoglobina Glicada',               '2025-01-22 13:30:00-03', 7.4,   '%'),
-    ('CE014', 'P000005', 'ENC006', 'Observação', 'glicemia_jejum',    'Glicemia em Jejum',                 '2025-01-22 13:30:00-03', 155.0, 'mg/dL'),
-    ('CE015', 'P000006', 'ENC007', 'Observação', 'HbA1c',             'Hemoglobina Glicada',               '2025-05-03 11:30:00-03', 9.2,   '%'),
-    ('CE016', 'P000009', 'ENC010', 'Observação', 'HbA1c',             'Hemoglobina Glicada',               '2025-02-28 10:30:00-03', 7.8,   '%'),
-    ('CE017', 'P000007', 'ENC008', 'Observação', 'pressao_arterial',  'Pressão Arterial Sistólica',        '2025-06-18 08:30:00-03', 180.0, 'mmHg'),
+    ('CE009', 'P000001', 'ENC001', 'OBSERVATION', 'HBA1C',            'Hemoglobina Glicada',        '2025-01-10 08:30:00', '8.1',   '%'),
+    ('CE010', 'P000001', 'ENC001', 'OBSERVATION', 'FASTING_GLUCOSE',  'Glicemia em Jejum',           '2025-01-10 08:30:00', '182.0', 'mg/dL'),
+    ('CE011', 'P000001', 'ENC001', 'OBSERVATION', 'BLOOD_PRESSURE',   'Pressão Arterial Sistólica',  '2025-01-10 08:30:00', '150.0', 'mmHg'),
+    ('CE012', 'P000003', 'ENC004', 'OBSERVATION', 'BLOOD_PRESSURE',   'Pressão Arterial Sistólica',  '2025-03-05 09:30:00', '165.0', 'mmHg'),
+    ('CE013', 'P000005', 'ENC006', 'OBSERVATION', 'HBA1C',            'Hemoglobina Glicada',         '2025-01-22 13:30:00', '7.4',   '%'),
+    ('CE014', 'P000005', 'ENC006', 'OBSERVATION', 'FASTING_GLUCOSE',  'Glicemia em Jejum',           '2025-01-22 13:30:00', '155.0', 'mg/dL'),
+    ('CE015', 'P000006', 'ENC007', 'OBSERVATION', 'HBA1C',            'Hemoglobina Glicada',         '2025-05-03 11:30:00', '9.2',   '%'),
+    ('CE016', 'P000009', 'ENC010', 'OBSERVATION', 'HBA1C',            'Hemoglobina Glicada',         '2025-02-28 10:30:00', '7.8',   '%'),
+    ('CE017', 'P000007', 'ENC008', 'OBSERVATION', 'BLOOD_PRESSURE',   'Pressão Arterial Sistólica',  '2025-06-18 08:30:00', '180.0', 'mmHg'),
     -- Medicações
-    ('CE018', 'P000001', 'ENC001', 'Medicação',  'Metformina_850mg',  'Metformina 850 mg',                 '2025-01-10 08:00:00-03', 850.0, 'mg'),
-    ('CE019', 'P000001', 'ENC002', 'Medicação',  'Losartana_50mg',    'Losartana 50 mg',                   '2024-07-15 14:00:00-03', 50.0,  'mg'),
-    ('CE020', 'P000003', 'ENC004', 'Medicação',  'Losartana_50mg',    'Losartana 50 mg',                   '2025-03-05 09:00:00-03', 50.0,  'mg'),
-    ('CE021', 'P000005', 'ENC006', 'Medicação',  'Metformina_850mg',  'Metformina 850 mg',                 '2025-01-22 13:00:00-03', 850.0, 'mg'),
-    ('CE022', 'P000006', 'ENC007', 'Medicação',  'Insulina_NPH',      'Insulina NPH',                      '2025-05-03 11:00:00-03', 20.0,  'UI'),
-    ('CE023', 'P000007', 'ENC008', 'Medicação',  'Atenolol_50mg',     'Atenolol 50 mg',                    '2025-06-18 08:00:00-03', 50.0,  'mg'),
-    ('CE024', 'P000009', 'ENC010', 'Medicação',  'Metformina_850mg',  'Metformina 850 mg',                 '2025-02-28 10:00:00-03', 850.0, 'mg'),
-    ('CE025', 'P000010', 'ENC011', 'Medicação',  'Losartana_50mg',    'Losartana 50 mg',                   '2025-03-15 14:00:00-03', 50.0,  'mg')
+    ('CE018', 'P000001', 'ENC001', 'MEDICATION', 'METFORMIN',   'Metformina 850 mg', '2025-01-10 08:00:00', '850', 'mg'),
+    ('CE019', 'P000001', 'ENC002', 'MEDICATION', 'LOSARTAN',    'Losartana 50 mg',   '2024-07-15 14:00:00', '50',  'mg'),
+    ('CE020', 'P000003', 'ENC004', 'MEDICATION', 'LOSARTAN',    'Losartana 50 mg',   '2025-03-05 09:00:00', '50',  'mg'),
+    ('CE021', 'P000005', 'ENC006', 'MEDICATION', 'METFORMIN',   'Metformina 850 mg', '2025-01-22 13:00:00', '850', 'mg'),
+    ('CE022', 'P000006', 'ENC007', 'MEDICATION', 'INSULIN_NPH', 'Insulina NPH',      '2025-05-03 11:00:00', '20',  'UI'),
+    ('CE023', 'P000007', 'ENC008', 'MEDICATION', 'ATENOLOL',    'Atenolol 50 mg',    '2025-06-18 08:00:00', '50',  'mg'),
+    ('CE024', 'P000009', 'ENC010', 'MEDICATION', 'METFORMIN',   'Metformina 850 mg', '2025-02-28 10:00:00', '850', 'mg'),
+    ('CE025', 'P000010', 'ENC011', 'MEDICATION', 'LOSARTAN',    'Losartana 50 mg',   '2025-03-15 14:00:00', '50',  'mg')
 ON CONFLICT DO NOTHING;

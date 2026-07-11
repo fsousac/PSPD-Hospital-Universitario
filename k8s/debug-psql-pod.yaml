@@ -1,0 +1,27 @@
+# Pod efêmero só para inspecionar o Postgres do cluster de dentro da rede
+# (192.168.122.1 não é alcançável de fora). Não faz parte do deploy da
+# aplicação — apagar depois de usar (kubectl delete -f).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: psql-debug
+  namespace: grupo-10
+spec:
+  restartPolicy: Never
+  containers:
+    - name: psql-debug
+      image: postgres:17-alpine
+      command: ["sleep", "600"]
+      env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: hu-db-credentials
+              key: QUARKUS_DATASOURCE_PASSWORD
+      resources:
+        requests:
+          cpu: "50m"
+          memory: "64Mi"
+        limits:
+          cpu: "100m"
+          memory: "128Mi"

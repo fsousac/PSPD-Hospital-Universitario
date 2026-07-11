@@ -1,0 +1,59 @@
+{
+  "title": "HU - Overview (grupo10)",
+  "schemaVersion": 39,
+  "tags": ["hu-pspd", "grupo10", "overview"],
+  "timezone": "browser",
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Pods prontos por Deployment",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "description": "Depende de kube-state-metrics estar instalado no cluster (ver docs/decisions/0005, seção Riscos).",
+      "targets": [
+        {
+          "expr": "kube_deployment_status_replicas_ready{namespace=\"grupo-10\"}",
+          "legendFormat": "{{deployment}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "CPU por pod (namespace grupo-10)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"grupo-10\"}[1m])) by (pod)",
+          "legendFormat": "{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Memória por pod (namespace grupo-10)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"grupo-10\"}) by (pod)",
+          "legendFormat": "{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Request rate total do gateway",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(gateway_http_requests_total{namespace=\"grupo-10\"}[1m]))",
+          "legendFormat": "requisições/s"
+        }
+      ]
+    }
+  ]
+}

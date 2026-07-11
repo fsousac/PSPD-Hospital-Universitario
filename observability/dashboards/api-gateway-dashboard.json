@@ -1,0 +1,102 @@
+{
+  "title": "HU - API Gateway (grupo10)",
+  "schemaVersion": 39,
+  "tags": ["hu-pspd", "grupo10", "api-gateway"],
+  "timezone": "browser",
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate por rota/status",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(gateway_http_requests_total{namespace=\"grupo-10\"}[1m])) by (route, status)",
+          "legendFormat": "{{route}} [{{status}}]"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Latência p50/p95/p99",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(gateway_http_request_duration_seconds_bucket{namespace=\"grupo-10\"}[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gateway_http_request_duration_seconds_bucket{namespace=\"grupo-10\"}[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(gateway_http_request_duration_seconds_bucket{namespace=\"grupo-10\"}[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Requisições em andamento (inflight)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(gateway_http_inflight_requests{namespace=\"grupo-10\"})",
+          "legendFormat": "inflight"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Taxa de erro HTTP (>=500)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(gateway_http_requests_total{namespace=\"grupo-10\", status=~\"5..\"}[1m])) / sum(rate(gateway_http_requests_total{namespace=\"grupo-10\"}[1m]))",
+          "legendFormat": "taxa de erro"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Rate limit rejections",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(gateway_rate_limit_rejections_total{namespace=\"grupo-10\"}[1m]))",
+          "legendFormat": "rejections/s"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Chamadas upstream gRPC (auth/PDS/DTS) - rate e latência",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(gateway_upstream_requests_total{namespace=\"grupo-10\"}[1m])) by (service, code)",
+          "legendFormat": "{{service}} [{{code}}]"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Latência upstream gRPC p95",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gateway_upstream_request_duration_seconds_bucket{namespace=\"grupo-10\"}[5m])) by (le, service))",
+          "legendFormat": "{{service}} p95"
+        }
+      ]
+    }
+  ]
+}

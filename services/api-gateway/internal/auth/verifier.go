@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 )
@@ -86,7 +87,19 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (*Claims, error)
 	return &Claims{
 		Subject:  idToken.Subject,
 		Username: ra.PreferredUsername,
-		Roles:    ra.RealmAccess.Roles,
+		Roles:    normalizeRoles(ra.RealmAccess.Roles),
 		Raw:      rawToken,
 	}, nil
+}
+
+// normalizeRoles baixa o case das roles: o realm "hu" local usa roles
+// minúsculas, mas o realm compartilhado do cluster (grupoXX) provisiona
+// MEDICO/ESTAGIARIO/PESQUISADOR em maiúsculas. PrimaryRole() compara sempre
+// lowercase.
+func normalizeRoles(roles []string) []string {
+	out := make([]string, len(roles))
+	for i, r := range roles {
+		out[i] = strings.ToLower(r)
+	}
+	return out
 }

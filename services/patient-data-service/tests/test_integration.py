@@ -1,5 +1,4 @@
 from datetime import date, datetime, timezone
-from decimal import Decimal
 
 import pytest
 import pytest_asyncio
@@ -56,36 +55,37 @@ async def seed_data(session_factory):
         enc = Encounter(
             encounter_id="ENC001",
             patient_id="P000001",
-            start_date=datetime(2025, 1, 10, 8, 0, tzinfo=timezone.utc),
-            end_date=datetime(2025, 1, 10, 9, 30, tzinfo=timezone.utc),
-            type="Ambulatorial",
-            department="Endocrinologia",
+            start_date=datetime(2025, 1, 10, 8, 0),
+            end_date=datetime(2025, 1, 10, 9, 30),
+            type="AMBULATORIAL",
+            department="ENDOCRINOLOGY",
         )
         ev1 = ClinicalEvent(
             event_id="CE001",
             patient_id="P000001",
             encounter_id="ENC001",
-            event_type="Condição",
-            event_code="diabetes_tipo_2",
+            event_type="CONDITION",
+            event_code="DIABETES",
             description="Diabetes Mellitus Tipo 2",
-            event_date=datetime(2023, 1, 10, 8, 0, tzinfo=timezone.utc),
+            event_date=datetime(2023, 1, 10, 8, 0),
         )
         ev2 = ClinicalEvent(
             event_id="CE002",
             patient_id="P000001",
             encounter_id="ENC001",
-            event_type="Observação",
-            event_code="HbA1c",
+            event_type="OBSERVATION",
+            event_code="HBA1C",
             description="Hemoglobina Glicada",
-            event_date=datetime(2025, 1, 10, 8, 30, tzinfo=timezone.utc),
-            value=Decimal("8.1"),
+            event_date=datetime(2025, 1, 10, 8, 30),
+            value="8.1",
             unit="%",
         )
         upa = UserPatientAssignment(
+            assignment_id="A0000000001",
             username="dr.silva",
             patient_id="P000001",
-            tipo_vinculo="medico",
-            status="ativo",
+            tipo_vinculo="ATTENDING",
+            active=True,
         )
         session.add_all([p1, p2])
         await session.flush()
@@ -118,7 +118,7 @@ async def test_list_encounters(session_factory, seed_data):
             select(Encounter).where(Encounter.patient_id == "P000001")
         )).scalars().all()
     assert len(rows) == 1
-    assert rows[0].department == "Endocrinologia"
+    assert rows[0].department == "ENDOCRINOLOGY"
 
 
 @pytest.mark.asyncio(loop_scope="module")
@@ -139,12 +139,12 @@ async def test_get_clinical_events_filtered(session_factory, seed_data):
             select(ClinicalEvent).where(
                 and_(
                     ClinicalEvent.patient_id == "P000001",
-                    ClinicalEvent.event_type == "Condição",
+                    ClinicalEvent.event_type == "CONDITION",
                 )
             )
         )).scalars().all()
     assert len(rows) == 1
-    assert rows[0].event_code == "diabetes_tipo_2"
+    assert rows[0].event_code == "DIABETES"
 
 
 @pytest.mark.asyncio(loop_scope="module")
@@ -154,8 +154,8 @@ async def test_cohort_query(session_factory, seed_data):
         subq = (
             select(ClinicalEvent.patient_id)
             .where(and_(
-                ClinicalEvent.event_code == "diabetes_tipo_2",
-                ClinicalEvent.event_type == "Condição",
+                ClinicalEvent.event_code == "DIABETES",
+                ClinicalEvent.event_type == "CONDITION",
             ))
             .distinct()
         )

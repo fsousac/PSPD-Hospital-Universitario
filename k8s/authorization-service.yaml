@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authorization-service
+  labels:
+    app: authorization-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authorization-service
+  template:
+    metadata:
+      labels:
+        app: authorization-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/q/metrics"
+    spec:
+      containers:
+        - name: authorization-service
+          # ghcr.io/fsousac (GitHub Container Registry, pacote público) —
+          # build local + push manual até haver CI (ver docs/decisions/0005).
+          image: ghcr.io/fsousac/hu-authorization-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http-grpc
+          envFrom:
+            - configMapRef:
+                name: hu-config
+            - secretRef:
+                name: hu-db-credentials
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "384Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          # JVM (não-native) demora mais a subir que os outros serviços —
+          # startupProbe evita que liveness/readiness matem o pod antes do
+          # boot terminar, sem precisar inflar initialDelaySeconds das duas.
+          startupProbe:
+            httpGet:
+              path: /q/health/started
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /q/health/live
+              port: 8080
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /q/health/ready
+              port: 8080
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: authorization-service
+  labels:
+    app: authorization-service
+spec:
+  selector:
+    app: authorization-service
+  ports:
+    - name: http-grpc
+      port: 8080
+      targetPort: 8080

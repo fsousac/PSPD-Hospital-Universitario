@@ -186,6 +186,31 @@ Ver [ADR 0003](docs/decisions/0003-data-transform-service-technical-decisions.md
 
 ---
 
+## Deploy no cluster K8S (grupo 10) e observabilidade
+
+Manifests Kubernetes (`k8s/`), scripts de teste de carga k6 (`loadtests/`) e
+dashboards Grafana (`observability/dashboards/`) para o cluster kubeadm
+compartilhado da disciplina. Cobre as fases de validação funcional, testes de
+carga, escalabilidade horizontal, autoscaling (HPA) e observabilidade da
+metodologia do professor.
+
+```bash
+# assumindo kubeconfig-grupo-10.yaml já obtido (fora deste repositório)
+cp k8s/secrets.env.example k8s/secrets.env   # preencher com a senha real do grupo10
+kubectl create secret generic hu-db-credentials -n grupo-10 --from-env-file=k8s/secrets.env
+kubectl apply -k k8s/                        # HPA fica fora até a fase de autoscaling
+kubectl apply -f k8s/hpa.yaml                # só na fase de autoscaling
+
+cd loadtests && ./run-scenarios.sh           # testes de carga (10/50/100/500/1000 VUs)
+```
+
+Ver [ADR 0005](docs/decisions/0005-k8s-observability-design.md) para as
+decisões técnicas (incluindo a adaptação de case-sensitividade de role e o
+seed de dados necessário para o Keycloak do cluster) e os riscos/suposições
+ainda a confirmar contra o cluster real.
+
+---
+
 ## Subindo tudo com Docker Compose
 
 ```bash

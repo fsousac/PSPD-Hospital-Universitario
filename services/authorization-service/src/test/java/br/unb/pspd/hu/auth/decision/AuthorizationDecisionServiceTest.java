@@ -24,6 +24,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * Testes unitários das 3 regras de decisão — repositórios mockados, sem
  * subir Quarkus/banco (contraste com AuthorizationGrpcServiceIT, que é o
  * teste de integração ponta a ponta).
+ *
+ * "medico"/"estagiario" são roles do JWT; "ATTENDING"/"TRAINEE" são o valor
+ * da coluna assignment_type no banco real — os mocks usam o valor do banco,
+ * já que é isso que o repositório recebe (ver AuthorizationDecisionService).
  */
 @ExtendWith(MockitoExtension.class)
 class AuthorizationDecisionServiceTest {
@@ -43,7 +47,7 @@ class AuthorizationDecisionServiceTest {
 
     @Test
     void medicoComVinculoAtivoRecebeAcessoFull() {
-        when(assignmentRepository.existsActiveAssignment("dr.silva", "P000001", "medico")).thenReturn(true);
+        when(assignmentRepository.existsActiveAssignment("dr.silva", "P000001", "ATTENDING")).thenReturn(true);
 
         var result = service.decide(
                 new JwtClaims("dr.silva", Set.of("medico")), ResourceType.PATIENT, "P000001", Action.READ);
@@ -54,7 +58,7 @@ class AuthorizationDecisionServiceTest {
 
     @Test
     void medicoSemVinculoRecebeDeny() {
-        when(assignmentRepository.existsActiveAssignment("dr.silva", "P999999", "medico")).thenReturn(false);
+        when(assignmentRepository.existsActiveAssignment("dr.silva", "P999999", "ATTENDING")).thenReturn(false);
 
         var result = service.decide(
                 new JwtClaims("dr.silva", Set.of("medico")), ResourceType.PATIENT, "P999999", Action.READ);
@@ -65,7 +69,7 @@ class AuthorizationDecisionServiceTest {
 
     @Test
     void estagiarioComVinculoAtivoRecebeAcessoPartial() {
-        when(assignmentRepository.existsActiveAssignment("estagiario.ana", "P000001", "estagiario")).thenReturn(true);
+        when(assignmentRepository.existsActiveAssignment("estagiario.ana", "P000001", "TRAINEE")).thenReturn(true);
 
         var result = service.decide(
                 new JwtClaims("estagiario.ana", Set.of("estagiario")), ResourceType.PATIENT, "P000001", Action.READ);
@@ -76,7 +80,7 @@ class AuthorizationDecisionServiceTest {
 
     @Test
     void estagiarioSemVinculoRecebeDeny() {
-        when(assignmentRepository.existsActiveAssignment("estagiario.ana", "P000002", "estagiario")).thenReturn(false);
+        when(assignmentRepository.existsActiveAssignment("estagiario.ana", "P000002", "TRAINEE")).thenReturn(false);
 
         var result = service.decide(
                 new JwtClaims("estagiario.ana", Set.of("estagiario")), ResourceType.PATIENT, "P000002", Action.READ);
@@ -88,7 +92,7 @@ class AuthorizationDecisionServiceTest {
     void pesquisadorComProjetoAprovadoLeituraRecebeAnonymized() {
         Project project = new Project();
         project.projectId = "PRJ01";
-        project.clinicalCondition = "diabetes_tipo_2";
+        project.targetConditionCode = "DIABETES";
         when(projectRepository.findApprovedProject("pesquisador.souza", "PRJ01"))
                 .thenReturn(Optional.of(project));
 
@@ -104,7 +108,7 @@ class AuthorizationDecisionServiceTest {
     void pesquisadorComProjetoAprovadoEstatisticaRecebeAggregated() {
         Project project = new Project();
         project.projectId = "PRJ01";
-        project.clinicalCondition = "diabetes_tipo_2";
+        project.targetConditionCode = "DIABETES";
         when(projectRepository.findApprovedProject("pesquisador.souza", "PRJ01"))
                 .thenReturn(Optional.of(project));
 
@@ -118,8 +122,8 @@ class AuthorizationDecisionServiceTest {
 
     @Test
     void pesquisadorComProjetoExpiradoOuSuspensoRecebeDeny() {
-        // findApprovedProject já filtra status='Aprovado' e vigência na query — projeto
-        // suspenso/expirado simplesmente não é encontrado.
+        // findApprovedProject já filtra status='APPROVED' e valid_until >= hoje na
+        // query — projeto suspenso/expirado simplesmente não é encontrado.
         when(projectRepository.findApprovedProject("pesquisador.souza", "PRJ02"))
                 .thenReturn(Optional.empty());
 

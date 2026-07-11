@@ -17,13 +17,22 @@ import java.util.Optional;
  * As três regras de negócio de autorização (médico / estagiário / pesquisador).
  * Não depende de gRPC nem de contexto Quarkus além dos repositórios — testável
  * com Mockito sem subir banco (ver ADR 0001, decisão 4).
+ *
+ * IMPORTANTE: as roles do JWT (medico/estagiario/pesquisador, vindas do
+ * Keycloak) são um vocabulário diferente do valor da coluna
+ * user_patient_assignments.assignment_type no banco real (ATTENDING/TRAINEE)
+ * — não são a mesma string reaproveitada. O mapeamento entre os dois é
+ * explícito aqui (ver ROLE_TO_ASSIGNMENT_TYPE), não decorre de nomes iguais.
  */
 @ApplicationScoped
 public class AuthorizationDecisionService {
 
+    private static final String ROLE_MEDICO = "medico";
+    private static final String ROLE_ESTAGIARIO = "estagiario";
+    private static final String ROLE_PESQUISADOR = "pesquisador";
+
     // Ordem de prioridade quando o token carrega mais de um papel (não especificado no enunciado).
-    private static final List<String> ROLE_PRIORITY =
-            List.of(UserPatientAssignment.TIPO_MEDICO, UserPatientAssignment.TIPO_ESTAGIARIO, "pesquisador");
+    private static final List<String> ROLE_PRIORITY = List.of(ROLE_MEDICO, ROLE_ESTAGIARIO, ROLE_PESQUISADOR);
 
     private final UserPatientAssignmentRepository assignmentRepository;
     private final ProjectRepository projectRepository;
@@ -43,24 +52,24 @@ public class AuthorizationDecisionService {
         }
 
         return switch (role) {
-            case UserPatientAssignment.TIPO_MEDICO ->
-                    decidePatientAssignment(claims.username(), resourceType, resourceId, UserPatientAssignment.TIPO_MEDICO, AccessLevel.FULL);
-            case UserPatientAssignment.TIPO_ESTAGIARIO ->
-                    decidePatientAssignment(claims.username(), resourceType, resourceId, UserPatientAssignment.TIPO_ESTAGIARIO, AccessLevel.PARTIAL);
+            case ROLE_MEDICO -> decidePatientAssignment(
+                    claims.username(), resourceType, resourceId, UserPatientAssignment.ASSIGNMENT_TYPE_ATTENDING, AccessLevel.FULL);
+            case ROLE_ESTAGIARIO -> decidePatientAssignment(
+                    claims.username(), resourceType, resourceId, UserPatientAssignment.ASSIGNMENT_TYPE_TRAINEE, AccessLevel.PARTIAL);
             default -> decidePesquisador(claims.username(), resourceType, resourceId, action);
         };
     }
 
     private DecisionResult decidePatientAssignment(
-            String username, ResourceType resourceType, String patientId, String tipoVinculo, AccessLevel level) {
+            String username, ResourceType resourceType, String patientId, String assignmentType, AccessLevel level) {
         if (resourceType != ResourceType.PATIENT) {
             return DecisionResult.deny("tipo de recurso não suportado para este perfil");
         }
-        boolean hasAssignment = assignmentRepository.existsActiveAssignment(username, patientId, tipoVinculo);
+        boolean hasAssignment = assignmentRepository.existsActiveAssignment(username, patientId, assignmentType);
         if (!hasAssignment) {
-            return DecisionResult.deny("nenhum vínculo '%s' ativo entre %s e o paciente %s".formatted(tipoVinculo, username, patientId));
+            return DecisionResult.deny("nenhum vínculo '%s' ativo entre %s e o paciente %s".formatted(assignmentType, username, patientId));
         }
-        return DecisionResult.allow(level, "vínculo '%s' ativo encontrado".formatted(tipoVinculo));
+        return DecisionResult.allow(level, "vínculo '%s' ativo encontrado".formatted(assignmentType));
     }
 
     private DecisionResult decidePesquisador(String username, ResourceType resourceType, String projectId, Action action) {
@@ -72,12 +81,12 @@ public class AuthorizationDecisionService {
             return DecisionResult.deny(
                     "nenhum projeto aprovado e vigente de %s com id '%s'".formatted(username, projectId));
         }
-        String clinicalCondition = project.get().clinicalCondition;
+        String targetConditionCode = project.get().targetConditionCode;
         return switch (action) {
             case AGGREGATE -> DecisionResult.allow(AccessLevel.AGGREGATED,
-                    "projeto %s (%s) aprovado — estatística agregada".formatted(projectId, clinicalCondition));
+                    "projeto %s (%s) aprovado — estatística agregada".formatted(projectId, targetConditionCode));
             case READ, LIST -> DecisionResult.allow(AccessLevel.ANONYMIZED,
-                    "projeto %s (%s) aprovado — dados anonimizados".formatted(projectId, clinicalCondition));
+                    "projeto %s (%s) aprovado — dados anonimizados".formatted(projectId, targetConditionCode));
             default -> DecisionResult.deny("ação não suportada para o perfil pesquisador");
         };
     }

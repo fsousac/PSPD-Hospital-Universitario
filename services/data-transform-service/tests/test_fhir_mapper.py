@@ -25,16 +25,16 @@ ENCOUNTER = {
     "patient_id": "P000001",
     "start_date": "2025-01-10T08:00:00+00:00",
     "end_date": "2025-01-10T09:30:00+00:00",
-    "type": "Ambulatorial",
-    "department": "Endocrinologia",
+    "type": "AMBULATORIAL",
+    "department": "ENDOCRINOLOGY",
 }
 
 EVENT_CONDITION = {
     "event_id": "CE001",
     "patient_id": "P000001",
     "encounter_id": "ENC001",
-    "event_type": "Condição",
-    "event_code": "diabetes_tipo_2",
+    "event_type": "CONDITION",
+    "event_code": "DIABETES",
     "description": "Diabetes Mellitus Tipo 2",
     "event_date": "2025-01-10T08:00:00+00:00",
     "value": "",
@@ -45,8 +45,8 @@ EVENT_OBSERVATION = {
     "event_id": "CE009",
     "patient_id": "P000001",
     "encounter_id": "ENC001",
-    "event_type": "Observação",
-    "event_code": "HbA1c",
+    "event_type": "OBSERVATION",
+    "event_code": "HBA1C",
     "description": "Hemoglobina Glicada",
     "event_date": "2025-01-10T08:30:00+00:00",
     "value": "8.1",
@@ -57,8 +57,8 @@ EVENT_MEDICATION = {
     "event_id": "CE018",
     "patient_id": "P000001",
     "encounter_id": "ENC001",
-    "event_type": "Medicação",
-    "event_code": "Metformina_850mg",
+    "event_type": "MEDICATION",
+    "event_code": "METFORMIN",
     "description": "Metformina 850 mg",
     "event_date": "2025-01-10T08:00:00+00:00",
     "value": "850.0",
@@ -124,7 +124,7 @@ class TestEncounterToFhir:
 
     def test_department(self):
         r = encounter_to_fhir(ENCOUNTER)
-        assert r["serviceType"]["text"] == "Endocrinologia"
+        assert r["serviceType"]["text"] == "ENDOCRINOLOGY"
 
     def test_period(self):
         r = encounter_to_fhir(ENCOUNTER)
@@ -137,7 +137,7 @@ class TestClinicalEventToFhir:
         r = clinical_event_to_fhir(EVENT_CONDITION)
         assert r["resourceType"] == "Condition"
         assert r["id"] == "CE001"
-        assert r["code"]["coding"][0]["code"] == "diabetes_tipo_2"
+        assert r["code"]["coding"][0]["code"] == "DIABETES"
 
     def test_observation(self):
         r = clinical_event_to_fhir(EVENT_OBSERVATION)

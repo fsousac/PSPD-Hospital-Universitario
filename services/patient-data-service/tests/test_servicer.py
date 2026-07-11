@@ -1,5 +1,4 @@
 from datetime import date, datetime, timezone
-from decimal import Decimal
 
 import pytest
 
@@ -26,21 +25,21 @@ def make_encounter(encounter_id="ENC001", patient_id="P000001") -> Encounter:
     e.patient_id = patient_id
     e.start_date = datetime(2025, 1, 10, 8, 0, tzinfo=timezone.utc)
     e.end_date = datetime(2025, 1, 10, 9, 30, tzinfo=timezone.utc)
-    e.type = "Ambulatorial"
-    e.department = "Endocrinologia"
+    e.type = "AMBULATORIAL"
+    e.department = "ENDOCRINOLOGY"
     return e
 
 
-def make_event(event_id="CE001", patient_id="P000001", event_type="Condição") -> ClinicalEvent:
+def make_event(event_id="CE001", patient_id="P000001", event_type="CONDITION") -> ClinicalEvent:
     ev = ClinicalEvent()
     ev.event_id = event_id
     ev.patient_id = patient_id
     ev.encounter_id = "ENC001"
     ev.event_type = event_type
-    ev.event_code = "diabetes_tipo_2"
+    ev.event_code = "DIABETES"
     ev.description = "Diabetes Mellitus Tipo 2"
     ev.event_date = datetime(2025, 1, 10, 8, 30, tzinfo=timezone.utc)
-    ev.value = Decimal("8.1")
+    ev.value = "8.1"
     ev.unit = "%"
     return ev
 
@@ -78,8 +77,8 @@ class TestEncounterToDict:
         d = encounter_to_dict(make_encounter())
         assert d["encounter_id"] == "ENC001"
         assert d["patient_id"] == "P000001"
-        assert d["type"] == "Ambulatorial"
-        assert d["department"] == "Endocrinologia"
+        assert d["type"] == "AMBULATORIAL"
+        assert d["department"] == "ENDOCRINOLOGY"
 
     def test_start_date_isoformat(self):
         d = encounter_to_dict(make_encounter())
@@ -102,8 +101,8 @@ class TestEventToDict:
     def test_all_fields(self):
         d = event_to_dict(make_event())
         assert d["event_id"] == "CE001"
-        assert d["event_type"] == "Condição"
-        assert d["event_code"] == "diabetes_tipo_2"
+        assert d["event_type"] == "CONDITION"
+        assert d["event_code"] == "DIABETES"
         assert d["value"] == "8.1"
         assert d["unit"] == "%"
 

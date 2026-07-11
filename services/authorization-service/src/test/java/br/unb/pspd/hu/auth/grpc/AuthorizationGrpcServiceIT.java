@@ -39,10 +39,30 @@ class AuthorizationGrpcServiceIT {
     }
 
     @Test
+    void medicoComRoleEmMaiusculasObtemAcessoFull() {
+        // Regressão: o realm compartilhado do cluster (grupoXX) provisiona
+        // roles em maiúsculas (MEDICO/ESTAGIARIO/PESQUISADOR), diferente do
+        // realm "hu" local (minúsculas). A extração de role deve ser
+        // case-insensitive — ver TokenValidationService.extractRealmRoles.
+        String token = TestTokens.forUser("dr.silva", "MEDICO");
+
+        AuthorizeResponse response = client.authorize(AuthorizeRequest.newBuilder()
+                        .setJwtToken(token)
+                        .setResourceType(ResourceType.PATIENT)
+                        .setResourceId("P000001")
+                        .setAction(Action.READ)
+                        .build())
+                .await().indefinitely();
+
+        assertTrue(response.getAllowed());
+        assertEquals(AccessLevel.FULL, response.getAccessLevel());
+    }
+
+    @Test
     void medicoSemVinculoAtivoEDeny() {
         String token = TestTokens.forUser("dr.silva", "medico");
 
-        // P000002 está com status 'inativo' no seed (import.sql).
+        // P000002 está com active=false no seed (import.sql).
         AuthorizeResponse response = client.authorize(AuthorizeRequest.newBuilder()
                         .setJwtToken(token)
                         .setResourceType(ResourceType.PATIENT)
@@ -58,7 +78,7 @@ class AuthorizationGrpcServiceIT {
     void pesquisadorComProjetoSuspensoEDeny() {
         String token = TestTokens.forUser("pesquisador.souza", "pesquisador");
 
-        // PRJ02 está com status 'Suspenso' no seed.
+        // PRJ02 está com status 'SUSPENDED' no seed.
         AuthorizeResponse response = client.authorize(AuthorizeRequest.newBuilder()
                         .setJwtToken(token)
                         .setResourceType(ResourceType.RESEARCH_PROJECT)

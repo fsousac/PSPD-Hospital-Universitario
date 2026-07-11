@@ -53,14 +53,16 @@ def compute_aggregate(
     patient_ids = {p["patient_id"] for p in patients}
     cohort_events = [ev for ev in events if ev.get("patient_id") in patient_ids]
 
-    med_events = [ev for ev in cohort_events if ev.get("event_type") == "Medicação"]
+    # Valores reais de event_type são maiúsculos em inglês — schema
+    # confirmado ao vivo contra o Postgres do cluster.
+    med_events = [ev for ev in cohort_events if ev.get("event_type") == "MEDICATION"]
     med_counts: Counter = Counter(ev.get("event_code", "") for ev in med_events)
     top_meds = [
         {"medication": code, "percentage": round(cnt / total * 100, 1)}
         for code, cnt in med_counts.most_common(5)
     ]
 
-    obs_events = [ev for ev in cohort_events if ev.get("event_type") == "Observação"]
+    obs_events = [ev for ev in cohort_events if ev.get("event_type") == "OBSERVATION"]
     exam_values: dict[str, list[float]] = {}
     exam_units: dict[str, str] = {}
     for ev in obs_events:

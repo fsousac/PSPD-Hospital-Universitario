@@ -2,38 +2,37 @@ package br.unb.pspd.hu.auth.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 
+/**
+ * Mapeia o schema REAL do banco pseudopep_gXX do cluster K8S da disciplina
+ * (ver nota em UserPatientAssignment.java). PK é chave natural (project_id).
+ * Não existe coluna valid_from no schema real — só valid_until.
+ */
 @Entity
 @Table(name = "projects")
 public class Project {
 
-    public static final String STATUS_APROVADO = "Aprovado";
+    public static final String STATUS_APPROVED = "APPROVED";
 
-    @jakarta.persistence.Id
-    @jakarta.persistence.GeneratedValue(strategy = jakarta.persistence.GenerationType.IDENTITY)
-    public Long id;
-
-    @Column(name = "project_id", nullable = false, unique = true)
+    @Id
+    @Column(name = "project_id")
     public String projectId;
 
     @Column(nullable = false)
-    public String username;
+    public String title;
 
-    @Column(name = "clinical_condition", nullable = false)
-    public String clinicalCondition;
+    @Column(name = "researcher_username", nullable = false)
+    public String researcherUsername;
+
+    @Column(name = "target_condition_code", nullable = false)
+    public String targetConditionCode;
 
     @Column(nullable = false)
     public String status;
 
-    @Column(name = "valid_from", nullable = false)
-    public LocalDate validFrom;
-
     @Column(name = "valid_until", nullable = false)
     public LocalDate validUntil;
-
-    @Column(name = "created_at", nullable = false)
-    public OffsetDateTime createdAt;
 }

@@ -77,12 +77,14 @@ def encounter_to_fhir(e: dict) -> dict:
 
 
 def clinical_event_to_fhir(ev: dict) -> dict | None:
+    # Valores reais de event_type são maiúsculos em inglês — schema
+    # confirmado ao vivo contra o Postgres do cluster.
     event_type = ev.get("event_type", "")
-    if event_type == "Condição":
+    if event_type == "CONDITION":
         return _condition(ev)
-    elif event_type == "Observação":
+    elif event_type == "OBSERVATION":
         return _observation(ev)
-    elif event_type == "Medicação":
+    elif event_type == "MEDICATION":
         return _medication_request(ev)
     return None
 

@@ -1,0 +1,58 @@
+# Confirmado contra o cluster real (kubectl auth can-i create
+# servicemonitors.monitoring.coreos.com -n grupo-10 -> yes; CRD
+# monitoring.coreos.com/v1 presente): o Prometheus do cluster usa o
+# Prometheus Operator, e o grupo TEM permissão para criar ServiceMonitor no
+# próprio namespace. Isso substitui a alternativa por annotations
+# prometheus.io/* como mecanismo primário de descoberta (as annotations
+# continuam nos Deployments como redundância barata, sem custo).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: api-gateway
+spec:
+  selector:
+    matchLabels:
+      app: api-gateway
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: authorization-service
+spec:
+  selector:
+    matchLabels:
+      app: authorization-service
+  endpoints:
+    - port: http-grpc
+      path: /q/metrics
+      interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: patient-data-service
+spec:
+  selector:
+    matchLabels:
+      app: patient-data-service
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: data-transform-service
+spec:
+  selector:
+    matchLabels:
+      app: data-transform-service
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
