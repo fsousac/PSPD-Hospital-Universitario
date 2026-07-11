@@ -43,24 +43,31 @@ func (c Claims) PrimaryRole() string {
 
 // Verifier encapsula o verificador OIDC apontado para o realm do Keycloak.
 type Verifier struct {
-	verifier *oidc.IDTokenVerifier
+	verifier       *oidc.IDTokenVerifier
+	expectedIssuer string
 }
 
 // NewVerifier faz a descoberta OIDC do issuer (busca o JWKS) e monta o
 // verificador. O cliente HTTP do go-oidc cacheia e renova as chaves.
-func NewVerifier(ctx context.Context, issuerURL, clientID string) (*Verifier, error) {
-	provider, err := oidc.NewProvider(ctx, issuerURL)
+func NewVerifier(ctx context.Context, discoveryIssuerURL, expectedIssuerURL, clientID string) (*Verifier, error) {
+	provider, err := oidc.NewProvider(ctx, discoveryIssuerURL)
 	if err != nil {
-		return nil, fmt.Errorf("descoberta OIDC em %q falhou: %w", issuerURL, err)
+		return nil, fmt.Errorf("descoberta OIDC em %q falhou: %w", discoveryIssuerURL, err)
 	}
 	cfg := &oidc.Config{ClientID: clientID}
+	if expectedIssuerURL != "" && expectedIssuerURL != discoveryIssuerURL {
+		// A descoberta pode usar a rede interna do Docker, enquanto o token
+		// emitido para o navegador usa a URL pública. O issuer continua sendo
+		// validado manualmente abaixo contra a URL pública configurada.
+		cfg.SkipIssuerCheck = true
+	}
 	// Tokens do Keycloak costumam ter aud="account"; quando não configuramos um
 	// client_id específico, desligamos a checagem de audience para não travar o
 	// fluxo em ambiente acadêmico.
 	if clientID == "" {
 		cfg.SkipClientIDCheck = true
 	}
-	return &Verifier{verifier: provider.Verifier(cfg)}, nil
+	return &Verifier{verifier: provider.Verifier(cfg), expectedIssuer: strings.TrimRight(expectedIssuerURL, "/")}, nil
 }
 
 // realmAccess mapeia o claim realm_access.roles do Keycloak.
@@ -79,6 +86,9 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (*Claims, error)
 	idToken, err := v.verifier.Verify(ctx, rawToken)
 	if err != nil {
 		return nil, fmt.Errorf("token inválido: %w", err)
+	}
+	if v.expectedIssuer != "" && strings.TrimRight(idToken.Issuer, "/") != v.expectedIssuer {
+		return nil, fmt.Errorf("issuer do token não autorizado")
 	}
 	var ra realmAccess
 	if err := idToken.Claims(&ra); err != nil {

@@ -19,7 +19,7 @@ function asJson(payload) {
 }
 
 export const handlers = [
-  http.get(`${env.apiBaseUrl}/me`, ({ request }) => {
+  http.get(`${env.apiBaseUrl}/api/v1/me`, ({ request }) => {
     const role = roleFromRequest({ request });
     const users = {
       medico: { username: 'dr.silva', displayName: 'Dr. Silva', roles: ['medico'] },
@@ -29,7 +29,7 @@ export const handlers = [
     return asJson(users[role]);
   }),
 
-  http.get(`${env.apiBaseUrl}/patients`, ({ request }) => {
+  http.get(`${env.apiBaseUrl}/api/v1/me/patients`, ({ request }) => {
     const role = roleFromRequest({ request });
     if (role === 'pesquisador') {
       return new HttpResponse(null, { status: 403 });
@@ -40,21 +40,21 @@ export const handlers = [
     });
   }),
 
-  http.get(`${env.apiBaseUrl}/patients/:patientId`, ({ request }) => {
+  http.get(`${env.apiBaseUrl}/api/v1/patients/:patientId`, ({ request }) => {
     const role = roleFromRequest({ request });
     return asJson(role === 'estagiario' ? partialSummary.patient : clinicalSummary.patient);
   }),
 
-  http.get(`${env.apiBaseUrl}/patients/:patientId/summary`, ({ request }) => {
+  http.get(`${env.apiBaseUrl}/api/v1/patients/:patientId/summary`, ({ request }) => {
     const role = roleFromRequest({ request });
     return asJson(role === 'estagiario' ? partialSummary : clinicalSummary);
   }),
 
-  http.get(`${env.apiBaseUrl}/patients/:patientId/encounters`, () => asJson({
+  http.get(`${env.apiBaseUrl}/api/v1/patients/:patientId/encounters`, () => asJson({
     encounters: clinicalSummary.recentEncounters,
   })),
 
-  http.get(`${env.apiBaseUrl}/patients/:patientId/events`, ({ request }) => {
+  http.get(`${env.apiBaseUrl}/api/v1/patients/:patientId/events`, ({ request }) => {
     const type = new URL(request.url).searchParams.get('type');
     const map = {
       diagnoses: clinicalSummary.diagnoses,
@@ -64,7 +64,7 @@ export const handlers = [
     return asJson({ events: map[type] || [] });
   }),
 
-  http.get(`${env.apiBaseUrl}/patients/:patientId/fhir`, () => asJson(fhirBundle)),
+  http.get(`${env.apiBaseUrl}/api/v1/patients/:patientId/fhir`, () => asJson(fhirBundle)),
 
   http.get(`${env.apiBaseUrl}/research/projects`, ({ request }) => {
     const role = roleFromRequest({ request });
@@ -83,4 +83,3 @@ export const handlers = [
 
   http.get(`${env.apiBaseUrl}/research/projects/:projectId/cohort`, () => asJson(cohort)),
 ];
-

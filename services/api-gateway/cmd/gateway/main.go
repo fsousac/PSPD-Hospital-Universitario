@@ -43,6 +43,7 @@ func main() {
 		"patient_data", cfg.PatientDataServiceAddr,
 		"data_transform", cfg.DataTransformServiceAddr,
 		"oidc_issuer", cfg.OIDCIssuerURL,
+		"oidc_public_issuer", cfg.OIDCPublicIssuerURL,
 	)
 
 	// Verificador OIDC — tenta descobrir o JWKS do Keycloak com retry, já que o
@@ -118,7 +119,7 @@ func newVerifierWithRetry(cfg config.Config) (*auth.Verifier, error) {
 	var lastErr error
 	for attempt := 1; attempt <= 10; attempt++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		v, err := auth.NewVerifier(ctx, cfg.OIDCIssuerURL, cfg.OIDCClientID)
+		v, err := auth.NewVerifier(ctx, cfg.OIDCIssuerURL, cfg.OIDCPublicIssuerURL, cfg.OIDCClientID)
 		cancel()
 		if err == nil {
 			return v, nil
