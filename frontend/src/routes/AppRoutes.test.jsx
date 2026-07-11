@@ -4,6 +4,16 @@ import { vi } from 'vitest';
 import { renderApp } from '../test/test-utils.jsx';
 
 describe('AppRoutes', () => {
+  it('shows the product access screen at the root route in mock mode', async () => {
+    renderApp({ route: '/', profile: 'medico' });
+
+    expect(await screen.findByRole('heading', { name: 'Acessar ambiente' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Entrar no sistema' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Entrar como Médico/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Entrar como Estagiário/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Entrar como Pesquisador/i })).not.toBeInTheDocument();
+  });
+
   it('shows patient navigation for doctors', async () => {
     renderApp({ route: '/dashboard', profile: 'medico' });
 
@@ -18,6 +28,11 @@ describe('AppRoutes', () => {
     expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Pesquisa/ })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Pacientes/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Visão de pesquisa protegida')).toBeInTheDocument();
+    expect(screen.getByText('Projetos de Pesquisa')).toBeInTheDocument();
+    expect(screen.queryByText('Últimos Pacientes')).not.toBeInTheDocument();
+    expect(screen.queryByText('João da Silva')).not.toBeInTheDocument();
+    expect(screen.queryByText('Carlos Mendes')).not.toBeInTheDocument();
   });
 
   it('opens navigation from the menu button on small screens', async () => {
