@@ -65,6 +65,28 @@ Estados clínicos devem manter texto explícito. Vermelho não pode ser usado pa
 - `AccessLevelChip`: nível de acesso retornado pelo backend.
 - `JsonViewer`: inspeção técnica de FHIR, sem logs automáticos.
 
+## Navegação e experiência responsiva
+
+- A navegação é agrupada por contexto: Visão geral, Assistência e Pesquisa.
+- Em desktop a sidebar é permanente; em tablet ela se reduz a ícones com tooltip; em mobile ela é temporária.
+- O cabeçalho identifica o usuário, o perfil e o modo mock quando aplicável.
+- Páginas de detalhe exibem breadcrumb e ação explícita para voltar à lista de origem.
+- Tabelas operacionais mantêm ordenação, paginação, densidade, configuração de colunas e rolagem horizontal.
+- Cabeçalhos de tabela permanecem visíveis durante a rolagem para apoiar tarefas de comparação.
+
+## Privacidade visual
+
+Os chips de acesso combinam código técnico, rótulo legível, ícone e tooltip:
+
+| Código | Rótulo | Significado visual |
+| --- | --- | --- |
+| `FULL` | Acesso completo | Dados disponíveis para o perfil, conforme o backend |
+| `PARTIAL` | Dados parcialmente ocultos | Identificadores removidos ou reduzidos |
+| `ANONYMIZED` | Dados anonimizados | Registros individuais pseudonimizados |
+| `AGGREGATED` | Dados agregados | Estatísticas populacionais, sem leitura individual |
+
+Cor nunca é o único indicador. A interface sempre usa texto e ícone, e não cria regras próprias de anonimização.
+
 ## Conteúdo
 
 - Usar frases diretas e indicar a próxima ação.

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
+  AlertTitle,
   Box,
   Button,
   Fade,
@@ -124,11 +125,16 @@ export function Dashboard() {
           )}
         />
 
+        <Alert severity="error" variant="outlined" icon={<WarningIcon />}>
+          <AlertTitle>Requer atenção clínica</AlertTitle>
+          Existem 3 alertas críticos sinalizados nos dados de demonstração. Confirme os registros no sistema assistencial oficial.
+        </Alert>
+
         <Box sx={{ display: 'grid', gap: 3, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' } }}>
-          <MetricCard title="Pacientes Totais" value="1.284" trend="+12%" color="primary" icon={<PeopleIcon />} />
-          <MetricCard title="Atendimentos Hoje" value="47" trend="+8%" color="success" icon={<TodayIcon />} />
-          <MetricCard title="Alertas Críticos" value="3" trend="-2" color="error" icon={<WarningIcon />} />
-          <MetricCard title="Taxa de Ocupação" value="78%" color="warning" icon={<HotelIcon />} progress={78} />
+          <MetricCard title="Pacientes Totais" value="1.284" trend="+12%" description="Em acompanhamento no período." color="primary" icon={<PeopleIcon />} />
+          <MetricCard title="Atendimentos Hoje" value="47" trend="+8%" description="Consultas e retornos registrados." color="success" icon={<TodayIcon />} />
+          <MetricCard title="Alertas Críticos" value="3" trend="-2" description="Sinalizados pela fonte clínica." color="error" icon={<WarningIcon />} />
+          <MetricCard title="Taxa de Ocupação" value="78%" description="Capacidade operacional utilizada." color="warning" icon={<HotelIcon />} progress={78} />
         </Box>
 
         <Box sx={{ display: 'grid', gap: 3, gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' } }}>

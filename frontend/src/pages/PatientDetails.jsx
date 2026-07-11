@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link as RouterLink, useParams } from 'react-router-dom';
 import {
   Box,
+  Breadcrumbs,
+  Button,
   Paper,
   Stack,
   Tab,
   Tabs,
   Typography,
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import BadgeIcon from '@mui/icons-material/Badge';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -29,6 +32,7 @@ import { JsonViewer } from '../components/JsonViewer.jsx';
 import { MetricCard } from '../components/MetricCard.jsx';
 import { OperationalTable } from '../components/OperationalTable.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
+import { TimelineList } from '../components/TimelineList.jsx';
 import { formatDate, genderLabel, protectedValue } from '../utils/format.js';
 import { reportAuditSignal } from '../observability/telemetry.js';
 
@@ -83,6 +87,12 @@ export function PatientDetails() {
 
   return (
     <Stack spacing={3}>
+      <Breadcrumbs aria-label="Navegação do prontuário">
+        <Button component={RouterLink} to="/patients" startIcon={<ArrowBackIcon />} size="small">
+          Pacientes
+        </Button>
+        <Typography color="text.secondary">{patient.patientId}</Typography>
+      </Breadcrumbs>
       <PageHeader
         title={protectedValue(patient.fullName)}
         subtitle={`${patient.patientId} · ${genderLabel(patient.gender)} · ${formatDate(patient.birthDate)}`}
@@ -116,15 +126,54 @@ export function PatientDetails() {
 
 function SummaryTab({ data }) {
   const patient = data.patient;
+  const timelineItems = [
+    ...(data.recentEncounters || []).map((encounter) => ({
+      id: encounter.encounterId,
+      description: `${encounter.type} · ${encounter.department}`,
+      time: formatDate(encounter.startDate),
+      icon: <CalendarMonthIcon fontSize="small" />,
+      color: 'primary.main',
+    })),
+    ...(data.diagnoses || []).map((event) => ({
+      id: event.eventId,
+      description: event.description,
+      time: formatDate(event.eventDate),
+      icon: <MonitorHeartIcon fontSize="small" />,
+      color: 'error.main',
+    })),
+    ...(data.exams || []).map((event) => ({
+      id: event.eventId,
+      description: `${event.description}${event.value ? ` · ${event.value} ${event.unit || ''}` : ''}`,
+      time: formatDate(event.eventDate),
+      icon: <ScienceIcon fontSize="small" />,
+      color: 'info.main',
+    })),
+    ...(data.medications || []).map((event) => ({
+      id: event.eventId,
+      description: event.description,
+      time: formatDate(event.eventDate),
+      icon: <MedicationIcon fontSize="small" />,
+      color: 'success.main',
+    })),
+  ];
+
   return (
-    <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' } }}>
-      <InfoCard label="Nome" value={protectedValue(patient.fullName)} icon={<PersonIcon />} />
-      <InfoCard label="CPF" value={protectedValue(patient.cpf)} icon={<BadgeIcon />} />
-      <InfoCard label="CNS" value={protectedValue(patient.cns)} icon={<BadgeIcon />} />
-      <InfoCard label="Cidade" value={protectedValue(patient.city)} icon={<PlaceIcon />} />
-      <InfoCard label="Estado" value={protectedValue(patient.state)} icon={<PlaceIcon />} />
-      <InfoCard label="Nível de acesso" value={data.accessLevel} icon={<AssignmentIcon />} />
-    </Box>
+    <Stack spacing={3}>
+      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' } }}>
+        <InfoCard label="Nome" value={protectedValue(patient.fullName)} icon={<PersonIcon />} />
+        <InfoCard label="CPF" value={protectedValue(patient.cpf)} icon={<BadgeIcon />} />
+        <InfoCard label="CNS" value={protectedValue(patient.cns)} icon={<BadgeIcon />} />
+        <InfoCard label="Cidade" value={protectedValue(patient.city)} icon={<PlaceIcon />} />
+        <InfoCard label="Estado" value={protectedValue(patient.state)} icon={<PlaceIcon />} />
+        <InfoCard label="Nível de acesso" value={data.accessLevel} icon={<AssignmentIcon />} />
+      </Box>
+      {timelineItems.length ? (
+        <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', p: { xs: 2, sm: 3 } }}>
+          <Typography variant="h3" sx={{ mb: 2 }}>Linha do tempo clínica</Typography>
+          <TimelineList items={timelineItems} />
+        </Paper>
+      ) : null}
+    </Stack>
   );
 }
 

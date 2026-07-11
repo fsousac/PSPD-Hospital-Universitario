@@ -4,7 +4,8 @@ import { alpha, useTheme } from '@mui/material/styles';
 export function MetricCard({ title, value, description, icon, color = 'primary', trend, progress }) {
   const theme = useTheme();
   const metricColor = theme.palette[color]?.main || color;
-  const trendColor = trend?.tone === 'down' ? 'error.main' : 'success.main';
+  const trendText = typeof trend === 'object' ? trend.value : trend;
+  const trendColor = trend?.tone === 'down' || String(trendText || '').trim().startsWith('-') ? 'error.main' : 'success.main';
 
   return (
     <Paper
@@ -50,8 +51,9 @@ export function MetricCard({ title, value, description, icon, color = 'primary',
           ) : null}
         </Stack>
         {trend ? (
-          <Typography variant="body2" color={trendColor} fontWeight={800}>
-            {trend}
+          <Typography variant="body2" color={trendColor} fontWeight={800} aria-label={`Variação: ${trendText}`}>
+            {trendText}
+            {typeof trend === 'object' && trend.label ? ` ${trend.label}` : null}
           </Typography>
         ) : null}
         {typeof progress === 'number' ? (
