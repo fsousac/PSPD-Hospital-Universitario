@@ -111,9 +111,37 @@ services:
       retries: 5
       start_period: 20s
 
-  # TODO: adicionar api-gateway após definição de stack
-  # api-gateway:
-  #   ...
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./services/api-gateway/Dockerfile
+    container_name: hu-api-gateway
+    restart: unless-stopped
+    environment:
+      GATEWAY_LISTEN_ADDR: ":8000"
+      AUTH_SERVICE_ADDR: authorization-service:8080
+      PATIENT_DATA_SERVICE_ADDR: patient-data-service:50052
+      DATA_TRANSFORM_SERVICE_ADDR: data-transform-service:50053
+      OIDC_ISSUER_URL: http://keycloak:8180/realms/hu
+      RATE_LIMIT_RPS: "500"
+      RATE_LIMIT_BURST: "1000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      keycloak:
+        condition: service_started
+      authorization-service:
+        condition: service_healthy
+      patient-data-service:
+        condition: service_healthy
+      data-transform-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/gateway", "-health-check"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # TODO: adicionar frontend após definição de stack
   # frontend:

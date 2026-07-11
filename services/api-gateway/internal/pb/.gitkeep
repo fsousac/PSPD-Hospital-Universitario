@@ -1,0 +1,2 @@
+# Diretório dos stubs gRPC gerados (authpb, patientpb, transformpb).
+# Rode ./scripts/generate_protos.ps1 (ou .sh) para preenchê-lo.
