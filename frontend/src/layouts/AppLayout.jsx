@@ -30,7 +30,6 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
 import SettingsIcon from '@mui/icons-material/Settings';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
-import { env } from '../config/env.js';
 import { useTheme } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '../auth/AuthProvider.jsx';
@@ -139,7 +138,6 @@ export function AppLayout() {
               <Typography variant="body2" fontWeight={700}>{user?.displayName}</Typography>
               <Typography variant="caption" color="text.secondary">{roleLabel(role)}</Typography>
             </Box>
-            {env.authMode === 'mock' ? <Chip label="Modo mock" size="small" color="info" variant="outlined" sx={{ display: { xs: 'none', md: 'inline-flex' } }} /> : null}
             <IconButton
               aria-label="Abrir menu do usuário"
               aria-controls={userMenuAnchor ? 'user-menu' : undefined}

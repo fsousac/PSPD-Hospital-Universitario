@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '../auth/ProtectedRoute.jsx';
 import { ROLES } from '../auth/roles.js';
 import { AppLayout } from '../layouts/AppLayout.jsx';
@@ -17,11 +17,11 @@ const ResearchProjectDetails = lazy(() => import('../pages/ResearchProjectDetail
 export function AppRoutes() {
   return (
     <Routes>
+      <Route path="/" element={<Login />} />
       <Route path="/login" element={<Login />} />
       <Route path="/forbidden" element={<Forbidden />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Suspense fallback={<LoadingState message="Carregando dashboard" />}><Dashboard /></Suspense>} />
           <Route element={<ProtectedRoute allowedRoles={[ROLES.DOCTOR, ROLES.INTERN]} />}>
             <Route path="/patients" element={<Suspense fallback={<LoadingState message="Carregando pacientes" />}><Patients /></Suspense>} />
