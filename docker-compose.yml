@@ -131,7 +131,7 @@ services:
       keycloak:
         condition: service_started
       authorization-service:
-        condition: service_started
+        condition: service_healthy
       patient-data-service:
         condition: service_healthy
       data-transform-service:

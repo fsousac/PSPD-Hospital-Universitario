@@ -10,10 +10,11 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/rabelzx/hu-gateway/internal/clients"
@@ -42,7 +43,11 @@ func New(cfg config.Config, c *clients.Clients) *Gateway {
 // Médico (FULL) ou estagiário (PARTIAL). Decide acesso no Authorization Service
 // e delega a montagem/anonimização FHIR ao Data Transform Service.
 func (g *Gateway) GetPatient(w http.ResponseWriter, r *http.Request) {
-	claims, _ := middleware.ClaimsFrom(r.Context())
+	claims, ok := middleware.ClaimsFrom(r.Context())
+	if !ok {
+		middleware.WriteError(w, http.StatusUnauthorized, "não autenticado")
+		return
+	}
 	patientID := chi.URLParam(r, "id")
 
 	decision, err := g.authorize(r.Context(), claims.Raw,
@@ -52,13 +57,19 @@ func (g *Gateway) GetPatient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !decision.GetAllowed() {
-		writeError(w, http.StatusForbidden, "acesso negado ao paciente")
+		middleware.WriteError(w, http.StatusForbidden, "acesso negado ao paciente")
+		return
+	}
+	accessLevel, ok := toTransformAccessLevel(decision.GetAccessLevel())
+	if !ok {
+		slog.Error("authorization-service retornou allowed=true com access_level inválido", "patient_id", patientID)
+		middleware.WriteError(w, http.StatusInternalServerError, "erro de autorização")
 		return
 	}
 
 	req := &transformpb.FhirTransformRequest{
 		PatientId:     patientID,
-		AccessLevel:   transformpb.AccessLevel(decision.GetAccessLevel()),
+		AccessLevel:   accessLevel,
 		ResourceTypes: []string{"Patient", "Encounter", "Condition", "Observation", "MedicationRequest"},
 	}
 	ctx, cancel := g.upstreamCtx(r.Context())
@@ -80,10 +91,14 @@ func (g *Gateway) GetPatient(w http.ResponseWriter, r *http.Request) {
 // O escopo é intrínseco: o Patient Data Service só devolve pacientes ligados ao
 // username do chamador, então não há decisão por-recurso a tomar aqui.
 func (g *Gateway) ListMyPatients(w http.ResponseWriter, r *http.Request) {
-	claims, _ := middleware.ClaimsFrom(r.Context())
+	claims, ok := middleware.ClaimsFrom(r.Context())
+	if !ok {
+		middleware.WriteError(w, http.StatusUnauthorized, "não autenticado")
+		return
+	}
 	role := claims.PrimaryRole()
 	if role != "medico" && role != "estagiario" {
-		writeError(w, http.StatusForbidden, "apenas médicos e estagiários têm lista de pacientes")
+		middleware.WriteError(w, http.StatusForbidden, "apenas médicos e estagiários têm lista de pacientes")
 		return
 	}
 
@@ -129,11 +144,15 @@ func (g *Gateway) ListMyPatients(w http.ResponseWriter, r *http.Request) {
 // Estatísticas agregadas de uma coorte, para pesquisadores. Autorização depende
 // de o projeto estar aprovado e vigente (regra no Authorization Service).
 func (g *Gateway) AggregateResearch(w http.ResponseWriter, r *http.Request) {
-	claims, _ := middleware.ClaimsFrom(r.Context())
+	claims, ok := middleware.ClaimsFrom(r.Context())
+	if !ok {
+		middleware.WriteError(w, http.StatusUnauthorized, "não autenticado")
+		return
+	}
 	condition := r.URL.Query().Get("condition")
 	projectID := r.URL.Query().Get("project")
 	if condition == "" || projectID == "" {
-		writeError(w, http.StatusBadRequest, "parâmetros 'condition' e 'project' são obrigatórios")
+		middleware.WriteError(w, http.StatusBadRequest, "parâmetros 'condition' e 'project' são obrigatórios")
 		return
 	}
 
@@ -144,14 +163,20 @@ func (g *Gateway) AggregateResearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !decision.GetAllowed() {
-		writeError(w, http.StatusForbidden, "acesso negado ao projeto de pesquisa")
+		middleware.WriteError(w, http.StatusForbidden, "acesso negado ao projeto de pesquisa")
+		return
+	}
+	accessLevel, ok := toTransformAccessLevel(decision.GetAccessLevel())
+	if !ok {
+		slog.Error("authorization-service retornou allowed=true com access_level inválido", "project_id", projectID)
+		middleware.WriteError(w, http.StatusInternalServerError, "erro de autorização")
 		return
 	}
 
 	req := &transformpb.AggregateRequest{
 		ClinicalCondition: condition,
 		ProjectId:         projectID,
-		AccessLevel:       transformpb.AccessLevel(decision.GetAccessLevel()),
+		AccessLevel:       accessLevel,
 	}
 	ctx, cancel := g.upstreamCtx(r.Context())
 	defer cancel()
@@ -167,8 +192,19 @@ func (g *Gateway) AggregateResearch(w http.ResponseWriter, r *http.Request) {
 	writeJSONPayload(w, "application/json", bundle.GetJsonPayload())
 }
 
-// Healthz — liveness probe.
+// Healthz — liveness probe: só confirma que o processo está de pé.
 func (g *Gateway) Healthz(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "UP"})
+}
+
+// Readyz — readiness probe: só reporta pronto se os três backends gRPC não
+// estiverem em falha (ver Clients.Ready), para o K8S não rotear tráfego real
+// a um pod cujas dependências ainda não subiram.
+func (g *Gateway) Readyz(w http.ResponseWriter, _ *http.Request) {
+	if !g.clients.Ready() {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "DOWN"})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "UP"})
 }
 
@@ -203,21 +239,57 @@ func recordUpstream(service, method string, start time.Time, err error) {
 	metrics.UpstreamRequestDuration.WithLabelValues(service, method).Observe(time.Since(start).Seconds())
 }
 
-// initials transforma "João da Silva" em "J.S." para o nível PARTIAL.
+// toTransformAccessLevel converte o AccessLevel decidido pelo Authorization
+// Service (authpb) para o tipo esperado pelo Data Transform Service
+// (transformpb). São dois enums gerados de protos distintos que hoje têm os
+// mesmos valores inteiros — um switch explícito, em vez de cast direto, evita
+// que uma futura divergência entre os dois protos vaze silenciosamente um
+// nível de acesso errado (ver ADR 0004, item 7).
+//
+// O segundo retorno é false para qualquer valor não mapeado, inclusive o
+// zero-value ACCESS_LEVEL_UNSPECIFIED: se o Authorization Service algum dia
+// devolver allowed=true sem um access_level válido, o chamador deve negar o
+// acesso (fail-closed) em vez de repassar UNSPECIFIED ao Data Transform
+// Service, que trata qualquer nível não reconhecido como "sem anonimização".
+func toTransformAccessLevel(a authpb.AccessLevel) (transformpb.AccessLevel, bool) {
+	switch a {
+	case authpb.AccessLevel_FULL:
+		return transformpb.AccessLevel_FULL, true
+	case authpb.AccessLevel_PARTIAL:
+		return transformpb.AccessLevel_PARTIAL, true
+	case authpb.AccessLevel_ANONYMIZED:
+		return transformpb.AccessLevel_ANONYMIZED, true
+	case authpb.AccessLevel_AGGREGATED:
+		return transformpb.AccessLevel_AGGREGATED, true
+	default:
+		return transformpb.AccessLevel_ACCESS_LEVEL_UNSPECIFIED, false
+	}
+}
+
+// initials transforma "João da Silva" em "J. S." para o nível PARTIAL,
+// ignorando partículas curtas (de/da/do/dos) — mesmo critério usado pelo
+// Data Transform Service (anonymizer._initials) para o nível PARTIAL em
+// Python, mantendo a anonimização consistente entre os dois serviços.
 func initials(name string) string {
-	out := ""
-	prevSpace := true
-	for _, ch := range name {
-		if ch == ' ' {
-			prevSpace = true
-			continue
-		}
-		if prevSpace {
-			out += string(ch) + "."
-			prevSpace = false
+	var parts []string
+	for _, p := range strings.Fields(name) {
+		if len([]rune(p)) > 2 {
+			parts = append(parts, p)
 		}
 	}
-	return out
+	switch len(parts) {
+	case 0:
+		if name == "" {
+			return ""
+		}
+		return string([]rune(name)[0]) + "."
+	case 1:
+		return string([]rune(parts[0])[0]) + "."
+	default:
+		first := string([]rune(parts[0])[0])
+		last := string([]rune(parts[len(parts)-1])[0])
+		return first + ". " + last + "."
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
@@ -237,14 +309,28 @@ func writeJSONPayload(w http.ResponseWriter, contentType, payload string) {
 	_, _ = w.Write([]byte(payload))
 }
 
-func writeError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_, _ = w.Write([]byte(`{"error":` + strconv.Quote(msg) + `}`))
-}
-
-// writeUpstreamError traduz erros gRPC dos serviços internos em respostas HTTP.
+// writeUpstreamError traduz erros gRPC dos serviços internos em respostas
+// HTTP, preservando o código de erro quando o serviço interno já sinalizou um
+// motivo específico (paciente inexistente, argumento inválido, etc.) em vez
+// de sempre devolver 502 — código que não distingue "backend fora do ar" de
+// "recurso não encontrado". A mensagem enviada ao cliente é sempre genérica
+// (fixa por status); o texto original do backend só vai para o log — nunca
+// repassamos st.Message() ao chamador, já que um serviço interno pode um dia
+// colocar detalhe sensível ali (erro de banco, stack, etc.).
 func writeUpstreamError(w http.ResponseWriter, service string, err error) {
 	slog.Error("erro no serviço interno", "service", service, "err", err.Error())
-	writeError(w, http.StatusBadGateway, "falha ao contatar "+service)
+	switch status.Code(err) {
+	case codes.NotFound:
+		middleware.WriteError(w, http.StatusNotFound, "recurso não encontrado")
+	case codes.InvalidArgument:
+		middleware.WriteError(w, http.StatusBadRequest, "parâmetros inválidos")
+	case codes.PermissionDenied:
+		middleware.WriteError(w, http.StatusForbidden, "acesso negado")
+	case codes.Unauthenticated:
+		middleware.WriteError(w, http.StatusUnauthorized, "não autenticado")
+	case codes.DeadlineExceeded:
+		middleware.WriteError(w, http.StatusGatewayTimeout, "tempo limite ao contatar "+service)
+	default:
+		middleware.WriteError(w, http.StatusBadGateway, "falha ao contatar "+service)
+	}
 }

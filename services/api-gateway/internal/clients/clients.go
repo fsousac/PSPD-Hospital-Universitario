@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/rabelzx/hu-gateway/internal/config"
@@ -33,17 +34,17 @@ func New(cfg config.Config) (*Clients, error) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
-	authConn, err := grpc.NewClient(cfg.AuthServiceAddr, opts...)
+	authConn, err := dial("authorization-service", cfg.AuthServiceAddr, opts)
 	if err != nil {
-		return nil, fmt.Errorf("dial authorization-service (%s): %w", cfg.AuthServiceAddr, err)
+		return nil, err
 	}
-	patientConn, err := grpc.NewClient(cfg.PatientDataServiceAddr, opts...)
+	patientConn, err := dial("patient-data-service", cfg.PatientDataServiceAddr, opts)
 	if err != nil {
-		return nil, fmt.Errorf("dial patient-data-service (%s): %w", cfg.PatientDataServiceAddr, err)
+		return nil, err
 	}
-	transformConn, err := grpc.NewClient(cfg.DataTransformServiceAddr, opts...)
+	transformConn, err := dial("data-transform-service", cfg.DataTransformServiceAddr, opts)
 	if err != nil {
-		return nil, fmt.Errorf("dial data-transform-service (%s): %w", cfg.DataTransformServiceAddr, err)
+		return nil, err
 	}
 
 	return &Clients{
@@ -54,9 +55,32 @@ func New(cfg config.Config) (*Clients, error) {
 	}, nil
 }
 
+func dial(name, addr string, opts []grpc.DialOption) (*grpc.ClientConn, error) {
+	conn, err := grpc.NewClient(addr, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("dial %s (%s): %w", name, addr, err)
+	}
+	return conn, nil
+}
+
 // Close fecha todas as conexões gRPC.
 func (c *Clients) Close() {
 	for _, conn := range c.conns {
 		_ = conn.Close()
 	}
+}
+
+// Ready reporta se nenhuma das conexões gRPC upstream está em estado de
+// falha. Uma conexão nunca usada fica Idle (dial é lazy) — isso ainda conta
+// como pronta, só TransientFailure/Shutdown indicam um backend indisponível.
+// Connect() dispara a tentativa de conexão sem bloquear a chamada.
+func (c *Clients) Ready() bool {
+	for _, conn := range c.conns {
+		conn.Connect()
+		switch conn.GetState() {
+		case connectivity.TransientFailure, connectivity.Shutdown:
+			return false
+		}
+	}
+	return true
 }

@@ -83,7 +83,7 @@ func RateLimiter(rps float64, burst int) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !limiter.Allow() {
 				metrics.RateLimitRejections.Inc()
-				writeError(w, http.StatusTooManyRequests, "rate limit excedido")
+				WriteError(w, http.StatusTooManyRequests, "rate limit excedido")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -98,13 +98,13 @@ func Authn(verifier *auth.Verifier) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := bearerToken(r)
 			if token == "" {
-				writeError(w, http.StatusUnauthorized, "cabeçalho Authorization ausente ou malformado")
+				WriteError(w, http.StatusUnauthorized, "cabeçalho Authorization ausente ou malformado")
 				return
 			}
 			claims, err := verifier.Verify(r.Context(), token)
 			if err != nil {
 				slog.Warn("jwt rejeitado", "err", err.Error())
-				writeError(w, http.StatusUnauthorized, "token inválido ou expirado")
+				WriteError(w, http.StatusUnauthorized, "token inválido ou expirado")
 				return
 			}
 			ctx := context.WithValue(r.Context(), claimsKey, claims)
@@ -122,9 +122,9 @@ func bearerToken(r *http.Request) string {
 	return ""
 }
 
-// writeError é reexportado para os handlers via helper local; mantém o formato
-// de erro consistente em toda a API.
-func writeError(w http.ResponseWriter, status int, msg string) {
+// WriteError escreve um erro JSON padronizado; compartilhado com o pacote
+// gateway para manter um único formato de erro em toda a API.
+func WriteError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(`{"error":` + strconv.Quote(msg) + `}`))
