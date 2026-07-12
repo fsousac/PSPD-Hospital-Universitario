@@ -34,7 +34,10 @@ enableMocks().then(() => {
         <CssBaseline />
         <SnackbarProvider maxSnack={3} autoHideDuration={3500} anchorOrigin={{ vertical: 'top', horizontal: 'right' }}>
           <AppErrorBoundary>
-            <BrowserRouter basename={import.meta.env.BASE_URL}>
+            {/* BASE_URL do Vite sempre termina em "/" (ex. "/grupo10/"); sem
+                remover a barra, o Router não casa a URL sem barra final
+                (ex. "/grupo10") e não renderiza nada. */}
+            <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
               <AuthProvider>
                 <App />
               </AuthProvider>

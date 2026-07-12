@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { env } from '../config/env.js';
 import { configureApiClient } from '../api/client.js';
 import { createKeycloakClient, keycloakInitOptions } from './keycloak.js';
+import { decodeJwtPayload, loginWithPassword, refreshPasswordGrant } from './passwordGrant.js';
 import { ROLES } from './roles.js';
 
 const AuthContext = createContext(null);
@@ -49,20 +50,37 @@ function getInitialMockUser() {
   return mockUsers[getInitialMockProfile()];
 }
 
+// Papel do usuário vem de realm_access.roles (realm de dev local "hu") ou do
+// claim "groups" (realm real do cluster "grupo10", que não popula
+// realm_access nesse client — mesmo fallback usado no backend,
+// TokenValidationService.extractRealmRoles, ver docs/decisions/0005).
 function getRolesFromTokenParsed(tokenParsed) {
-  return tokenParsed?.realm_access?.roles?.filter((role) =>
-    [ROLES.DOCTOR, ROLES.INTERN, ROLES.RESEARCHER].includes(role),
-  ) || [];
+  const fromRealmAccess = tokenParsed?.realm_access?.roles || [];
+  const fromGroups = tokenParsed?.groups || [];
+  return [...fromRealmAccess, ...fromGroups]
+    .map((role) => String(role).replace(/^\//, '').toLowerCase())
+    .filter((role) => [ROLES.DOCTOR, ROLES.INTERN, ROLES.RESEARCHER].includes(role));
 }
 
 export function AuthProvider({ children }) {
-  const [status, setStatus] = useState(env.authMode === 'mock' ? 'authenticated' : 'loading');
+  const [status, setStatus] = useState(() => {
+    if (env.authMode === 'mock') return 'authenticated';
+    if (env.authMode === 'password') return 'anonymous';
+    return 'loading';
+  });
   const [user, setUser] = useState(env.authMode === 'mock' ? getInitialMockUser() : null);
   const [keycloak, setKeycloak] = useState(null);
+  // ponytail: só em memória (nunca localStorage/sessionStorage) — um reload
+  // de página derruba a sessão do modo password, exigindo login de novo.
+  // Trade-off aceito por segurança; se incomodar, guardar o refresh_token em
+  // sessionStorage resolveria.
+  const [passwordTokens, setPasswordTokens] = useState(null);
 
   useEffect(() => {
-    if (env.authMode === 'mock') {
-      sessionStorage.setItem('hu_mock_profile', getInitialMockProfile());
+    if (env.authMode !== 'keycloak') {
+      if (env.authMode === 'mock') {
+        sessionStorage.setItem('hu_mock_profile', getInitialMockProfile());
+      }
       return undefined;
     }
 
@@ -99,18 +117,6 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const login = useCallback((profile) => {
-    if (env.authMode === 'mock') {
-      const nextProfile = normalizeMockProfile(profile);
-      const nextUser = mockUsers[nextProfile];
-      sessionStorage.setItem('hu_mock_profile', nextProfile);
-      setUser(nextUser);
-      setStatus('authenticated');
-      return;
-    }
-    keycloak?.login();
-  }, [keycloak]);
-
   const logout = useCallback(() => {
     if (env.authMode === 'mock') {
       sessionStorage.removeItem('hu_mock_profile');
@@ -118,19 +124,82 @@ export function AuthProvider({ children }) {
       setStatus('authenticated');
       return;
     }
+    if (env.authMode === 'password') {
+      setPasswordTokens(null);
+      setUser(null);
+      setStatus('anonymous');
+      return;
+    }
     keycloak?.logout();
   }, [keycloak]);
+
+  const login = useCallback(async (usernameOrProfile, password) => {
+    if (env.authMode === 'mock') {
+      const nextProfile = normalizeMockProfile(usernameOrProfile);
+      const nextUser = mockUsers[nextProfile];
+      sessionStorage.setItem('hu_mock_profile', nextProfile);
+      setUser(nextUser);
+      setStatus('authenticated');
+      return;
+    }
+    if (env.authMode === 'password') {
+      const result = await loginWithPassword({
+        keycloakUrl: env.keycloakUrl,
+        realm: env.keycloakRealm,
+        clientId: env.passwordGrantClientId,
+        username: usernameOrProfile,
+        password,
+      });
+      const payload = decodeJwtPayload(result.id_token);
+      setPasswordTokens({ idToken: result.id_token, refreshToken: result.refresh_token });
+      setUser({
+        username: payload.preferred_username || payload.sub,
+        displayName: payload.name || payload.preferred_username || 'Usuário',
+        roles: getRolesFromTokenParsed(payload),
+      });
+      setStatus('authenticated');
+      return;
+    }
+    keycloak?.login();
+  }, [keycloak]);
+
+  // Renova o par access/id/refresh token do modo password antes de expirar
+  // (grant "password" não tem update automático como o keycloak-js).
+  useEffect(() => {
+    if (env.authMode !== 'password' || !passwordTokens?.refreshToken) {
+      return undefined;
+    }
+    const refreshTimer = window.setInterval(async () => {
+      try {
+        const result = await refreshPasswordGrant({
+          keycloakUrl: env.keycloakUrl,
+          realm: env.keycloakRealm,
+          clientId: env.passwordGrantClientId,
+          refreshToken: passwordTokens.refreshToken,
+        });
+        const payload = decodeJwtPayload(result.id_token);
+        setPasswordTokens({ idToken: result.id_token, refreshToken: result.refresh_token });
+        setUser((prev) => prev && { ...prev, roles: getRolesFromTokenParsed(payload) });
+      } catch {
+        logout();
+      }
+    }, 30000);
+    return () => window.clearInterval(refreshTimer);
+  }, [passwordTokens, logout]);
 
   const getToken = useCallback(async () => {
     if (env.authMode === 'mock') {
       return user?.token || null;
+    }
+    if (env.authMode === 'password') {
+      return passwordTokens?.idToken || null;
     }
     if (!keycloak) {
       return null;
     }
     await keycloak.updateToken(30);
     return keycloak.token;
-  }, [keycloak, user]);
+  }, [keycloak, user, passwordTokens]);
 
   const value = useMemo(() => ({
     isAuthenticated: status === 'authenticated',

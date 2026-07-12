@@ -54,6 +54,38 @@ VITE_KEYCLOAK_REALM=hu
 VITE_KEYCLOAK_CLIENT_ID=hu-frontend
 ```
 
+(Valores acima são para o Keycloak local de dev, `docker compose up -d
+keycloak` + `scripts/setup-keycloak.sh`. No cluster compartilhado da
+disciplina, `VITE_KEYCLOAK_REALM=grupo10` e `VITE_KEYCLOAK_URL=https://kiriland.unb.br/keycloak`
+— ver seção "Kubernetes" abaixo.)
+
+### Modo `password` (workaround — client `hu-frontend` ainda não existe no cluster)
+
+`VITE_AUTH_MODE=keycloak` faz o `keycloak-js` redirecionar para o fluxo
+Authorization Code + PKCE, que exige um client OIDC registrado (`hu-frontend`)
+com `redirect_uri` cadastrado. No realm real do cluster (`grupo10`) esse
+client **não existe** — o Keycloak responde "Client not found" — e criá-lo
+exige acesso de admin do realm, que o grupo não tem (bloqueio externo, ver
+`docs/decisions/0005-k8s-observability-design.md`).
+
+Enquanto isso não é resolvido pelo professor/monitor, `VITE_AUTH_MODE=password`
+troca para um formulário de usuário/senha (`src/pages/Login.jsx`) que faz
+`grant_type=password` direto contra o client público `admin-cli`
+(`src/auth/passwordGrant.js`) — o mesmo client já validado pelo
+`loadtests/k6-scenario.js`. Variáveis:
+
+```text
+VITE_AUTH_MODE=password
+VITE_KEYCLOAK_URL=https://kiriland.unb.br/keycloak
+VITE_KEYCLOAK_REALM=grupo10
+VITE_PASSWORD_GRANT_CLIENT_ID=admin-cli   # default, raramente precisa mudar
+```
+
+Limitação aceita: o token fica só em memória (nunca `localStorage`/
+`sessionStorage`), então um F5 na página derruba a sessão — trade-off de
+segurança, não um bug. Voltar para `VITE_AUTH_MODE=keycloak` assim que o
+client `hu-frontend` existir no realm `grupo10`.
+
 O valor vazio de `VITE_API_BASE_URL` faz o navegador usar a própria origem. O
 Vite, em desenvolvimento, e o Nginx, em produção, encaminham `/api` para a
 API Gateway. Assim o frontend não chama gRPC nem depende de CORS no navegador.
@@ -74,18 +106,30 @@ http://localhost:8088
 
 ## Kubernetes
 
-Os manifests do frontend ficam em `../k8s/` e sobem a aplicação:
+Os manifests do frontend ficam em `../k8s/` e sobem no namespace `grupo-10`
+do cluster compartilhado da disciplina (ver `../k8s/README.md` para o fluxo
+completo, incluindo o build da imagem com os `--build-arg VITE_*` corretos —
+o Vite embute essas variáveis no bundle em build time, não em runtime):
 
 ```bash
 cd ..
-docker build -t hu-frontend:latest -f frontend/Dockerfile .
+docker build -t ghcr.io/fsousac/hu-frontend:latest \
+  --build-arg VITE_AUTH_MODE=password \
+  --build-arg VITE_KEYCLOAK_URL=https://kiriland.unb.br/keycloak \
+  --build-arg VITE_KEYCLOAK_REALM=grupo10 \
+  --build-arg VITE_BASE_PATH=/grupo10/ \
+  -f frontend/Dockerfile .
+docker push ghcr.io/fsousac/hu-frontend:latest
 kubectl apply -k k8s/
-kubectl -n hu-observability rollout status deployment/hu-frontend
+kubectl -n grupo-10 rollout status deployment/hu-frontend
 ```
 
-O Ingress padrão usa `hu-frontend.local`. Em um cluster, atualize
-`k8s/frontend-configmap.yaml` com as URLs públicas do Keycloak e da API
-Gateway, reconstrua a imagem e mantenha os mocks desabilitados.
+Acesso real em `https://kiriland.unb.br/grupo10` — host único
+(`kiriland.unb.br`) compartilhado com o Ingress do api-gateway, dividido por
+prioridade de path (o gateway atende só `/grupo10/(api/.*|healthz|readyz|metrics)`,
+o frontend é o catch-all do resto). Atualize `k8s/frontend-configmap.yaml`
+(referência apenas — não afeta uma imagem já construída) e reconstrua a
+imagem com os `--build-arg` corretos se algum desses valores mudar.
 
 ## Segurança
 

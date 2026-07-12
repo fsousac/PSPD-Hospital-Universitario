@@ -12,10 +12,16 @@ data:
   # da imagem publicada (ver k8s/README.md). Se o valor aqui não bate com o
   # que foi usado no build da imagem em uso, é a imagem que está errada.
   VITE_API_BASE_URL: ""
-  VITE_AUTH_MODE: "keycloak"
+  # "keycloak" (Authorization Code + PKCE) exige o client "hu-frontend" no
+  # realm grupo10, que não existe no cluster real ("Client not found" no
+  # /auth do Keycloak — bloqueio externo, ver docs/decisions/0005). Até o
+  # professor/monitor criar o client, usar "password" (grant_type=password
+  # contra o client público admin-cli, mesmo client já validado pelo k6).
+  VITE_AUTH_MODE: "password"
   VITE_ENABLE_MOCKS: "false"
   VITE_KEYCLOAK_URL: "https://kiriland.unb.br/keycloak"
   VITE_KEYCLOAK_REALM: "grupo10"
   VITE_KEYCLOAK_CLIENT_ID: "hu-frontend"
+  VITE_PASSWORD_GRANT_CLIENT_ID: "admin-cli"
   VITE_BASE_PATH: "/grupo10/"
 

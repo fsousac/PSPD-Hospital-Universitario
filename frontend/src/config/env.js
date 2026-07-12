@@ -6,4 +6,6 @@ export const env = {
   keycloakUrl: import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8180',
   keycloakRealm: import.meta.env.VITE_KEYCLOAK_REALM || 'hu',
   keycloakClientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'hu-frontend',
+  // Usado só quando authMode === 'password' (ver src/auth/passwordGrant.js).
+  passwordGrantClientId: import.meta.env.VITE_PASSWORD_GRANT_CLIENT_ID || 'admin-cli',
 };

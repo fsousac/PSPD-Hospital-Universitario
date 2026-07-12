@@ -16,6 +16,20 @@ medindo throughput, latência e taxa de erro via k6, e CPU/memória via Grafana.
 - Nada além disso: o script já faz login sozinho via client público
   `admin-cli` (confirmado que aceita password grant sem segredo nesse realm).
 
+## Antes de rodar (fases c/d da metodologia)
+
+O `hpa.yaml` (`../k8s/hpa.yaml`) fica fora do `kustomization.yaml` de
+propósito — só deve ser aplicado (`kubectl apply -f ../k8s/hpa.yaml`) na
+fase (d) de autoscaling. Rodar os testes de carga com HPA já aplicado
+durante a fase (c) (escalabilidade horizontal manual via `kubectl scale`)
+invalida a comparação, porque o HPA reverte a réplica manual. Ver `../k8s/README.md`.
+
+Os 3 microsserviços de backend usam Service headless + `round_robin` do
+lado do cliente gRPC — sem isso, réplicas extras (manuais ou via HPA) não
+recebem tráfego e o teste de carga colapsa mesmo com CPU/DB saudáveis (foi a
+causa raiz de um colapso real em 50 VUs, ver "gRPC pinado numa única
+réplica" em `../docs/decisions/0005-k8s-observability-design.md`).
+
 ## Rodando
 
 ```bash

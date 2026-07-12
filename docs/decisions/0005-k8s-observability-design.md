@@ -285,10 +285,14 @@ cluster compartilhado:
   validado em produção — mexer nele tem risco de regressão nas fases (a)/(c)/(d)
   já executadas). Não aplicado ainda — decisão para confirmar antes de tocar
   no Ingress do gateway.
-- **[pendente, ação externa]** client Keycloak `hu-frontend` (público, SPA)
-  referenciado em `VITE_KEYCLOAK_CLIENT_ID` — nada no repo confirma que esse
-  client existe no realm `grupo10` com `redirect_uri` correto pra
-  `https://kiriland.unb.br/grupo10/*`. Precisa checar/criar no Keycloak.
+- **[CONFIRMADO, ação externa]** client Keycloak `hu-frontend` (público, SPA)
+  referenciado em `VITE_KEYCLOAK_CLIENT_ID` — **não existe** no realm real
+  `grupo10`: acessar `https://kiriland.unb.br/grupo10` e entrar redireciona
+  pro `/auth` do Keycloak, que responde a página de erro **"Client not
+  found"**. Criar o client (público, Authorization Code + PKCE,
+  `redirect_uri` `https://kiriland.unb.br/grupo10/*`) exige admin do realm,
+  que o grupo não tem — bloqueio externo, mesma natureza dos outros itens de
+  Keycloak nesta seção. Ver "Workaround: login via admin-cli" abaixo.
 - `docs/frontend-api-contracts.md` está desatualizado (descreve endpoints
   provisórios `/api/patients`, `/api/research/projects` que não existem no
   gateway real) — o código do frontend já usa as rotas reais (`/api/v1/...`),
@@ -301,6 +305,52 @@ cluster compartilhado:
   tornar público em GitHub → perfil → Packages → `hu-frontend` → Package
   settings → Change visibility. `gh api` não tem escopo `packages` pra
   automatizar isso.
+
+## [RESOLVIDO] Tela em branco em `/grupo10` — basename do React Router (2026-07-12)
+
+Depois do primeiro deploy do frontend, `https://kiriland.unb.br/grupo10`
+carregava o bundle mas não renderizava nada. Console: `<Router
+basename="/grupo10/"> is not able to match the URL "/grupo10" because it
+does not start with the basename`. `import.meta.env.BASE_URL` do Vite
+sempre mantém a barra final (`/grupo10/`), mas a URL que o navegador usa sem
+digitar a barra (`/grupo10`) não começa com esse literal — falha de string
+match, não de configuração. **Fix**: `src/main.jsx` remove a barra final
+antes de passar como `basename` (`import.meta.env.BASE_URL.replace(/\/$/,
+'')`), que casa tanto `/grupo10` quanto `/grupo10/qualquer-coisa`.
+
+## [RESOLVIDO] Workaround: login via `admin-cli` (`grant_type=password`) (2026-07-12)
+
+Com a tela renderizando, o botão de login expôs o bloqueio real: redirect
+pro Keycloak retorna **"Client not found"** — confirma que `hu-frontend`
+(client público esperado pelo fluxo Authorization Code + PKCE do
+`keycloak-js`) não existe no realm `grupo10` do cluster. Criar esse client
+exige admin do realm, fora do alcance do grupo — mesma classe de bloqueio já
+documentada para o `authorization-service`/`account-console` (ver seção
+"Adaptação do uso do Keycloak" acima).
+
+Diferente daquele bloqueio (resolvido usando `admin-cli` para o k6), aqui não
+dá pra simplesmente trocar o `client_id` do `keycloak-js`: o fluxo
+Authorization Code depende do client ter um `redirect_uri` cadastrado, e
+`admin-cli` não tem (nem deveria, é built-in do Keycloak para uso via CLI).
+
+**Fix (workaround, não solução definitiva)**: `VITE_AUTH_MODE=password`
+troca o `AuthProvider` para Resource Owner Password Credentials
+(`grant_type=password`) direto contra `admin-cli` via `fetch`
+(`src/auth/passwordGrant.js`), sem `keycloak-js` nem redirect — a mesma
+chamada que já funciona em `loadtests/k6-scenario.js`. Usa o `id_token`
+(não o `access_token`, que é "lightweight" nesse realm — sem `sub`/roles)
+como Bearer para a API Gateway, e extrai o papel do claim `groups` (com
+fallback pra `realm_access.roles` no realm de dev local `hu`), mesma lógica
+de fallback já usada no backend (`TokenValidationService.extractRealmRoles`).
+Token fica só em memória (nunca `localStorage`/`sessionStorage`) — F5 na
+página derruba a sessão, trade-off aceito por segurança.
+
+**Não é a solução final**: o enunciado espera OAuth2/OIDC via Authorization
+Code (é o padrão de mercado para SPAs, e o que `keycloak-js` já implementa
+corretamente no repo). Assim que o professor/monitor criar o client
+`hu-frontend` no realm `grupo10` com o `redirect_uri` certo, o correto é
+voltar `VITE_AUTH_MODE=keycloak` — o código desse modo não foi removido, só
+deixou de ser o padrão do build do cluster.
 
 ## [RESOLVIDO] Bug de performance real em `GetPatientsByCarer` (2026-07-12)
 
@@ -367,29 +417,107 @@ fazia o vazio vencer, quebrando `ModuleNotFoundError: No module named
 `requirements.txt`) para não ficarem desatualizados em relação ao `.proto`
 atual.
 
-## Execução das fases (atualizado 2026-07-11, sessão de verificação ao vivo)
+## [RESOLVIDO] gRPC pinado numa única réplica — causa raiz do colapso em 50 VUs (2026-07-12)
 
-- **Fase (a) validação funcional**: pods rodando e saudáveis, mas validação
-  completa dos 3 perfis (MEDICO/ESTAGIARIO/PESQUISADOR) **bloqueada** pelo
-  item acima — sem JWT de aplicação não dá pra exercitar as regras de
-  autorização fim-a-fim contra o cluster real.
-- **Fase (b) testes de carga (k6)**: **bloqueada** pelo mesmo motivo — o
-  script de load test depende de um token de aplicação válido para chamar
-  os endpoints protegidos.
-- **Fase (c) escalabilidade horizontal**: **executada**. `kubectl scale
-  deployment api-gateway authorization-service data-transform-service
-  patient-data-service --replicas=3` — os 12 pods (3 por serviço) subiram
-  `1/1 Running`, um por nó em cada um dos 4 nós do cluster
-  (`k8s-master`, `k8s-worker-1/2/3`), confirmando distribuição uniforme do
-  scheduler. Sem carga real (bloqueio do item b), não há dado de ganho de
-  throughput para essa fase ainda — só a distribuição de pods está
-  documentada.
-- **Fase (d) autoscaling (HPA)**: `k8s/hpa.yaml` aplicado (4
-  `HorizontalPodAutoscaler`, min 1 / max 10 / CPU 70%). Métricas reais
-  confirmadas (`cpu: 1-2%/70%`) — bem abaixo do alvo, então o HPA reduz as 3
-  réplicas manuais de volta para 1 (comportamento esperado e correto do
-  HPA, não um bug). Falta ainda gerar carga real (bloqueada pelo item b)
-  para observar o HPA escalando *para cima*.
+Com o bloqueio de JWT resolvido, o primeiro teste de carga completo (10 VUs)
+já passou (97.87% sucesso), mas 50 VUs colapsou (90%+ de falha, a maioria
+`me/patients`/`patients/{id}` batendo no timeout de 5s). Escalar réplicas
+manualmente (fase c: `kubectl scale --replicas=3`, depois
+`authorization-service` para 2) **não mudou o resultado** — sinal de que o
+gargalo não era capacidade de CPU/réplicas.
+
+**Investigação, descartando hipóteses em ordem**:
+
+1. **CPU throttling** — descartado: `kubectl get hpa -w` durante o teste
+   mostrava utilização de CPU sempre baixa (nunca > ~68%) mesmo com o teste
+   falhando quase por completo.
+2. **Esgotamento do pool de conexões do Postgres** — descartado: consulta
+   ao vivo (`SHOW max_connections` = 500; `SELECT count(*) FROM
+   pg_stat_activity ... GROUP BY state` via `\watch 2`, só leitura,
+   autorizado explicitamente) nunca mostrou mais que ~9 conexões ativas
+   durante um teste de 50 VUs.
+3. **Pinagem de conexão gRPC no lado do cliente (causa raiz confirmada)** —
+   `grpc.NewClient`/`grpc.aio.insecure_channel` no `api-gateway` e no
+   `data-transform-service` abre uma única conexão HTTP/2 no start do
+   processo e a reutiliza por todo o processo. Contra um Service
+   `ClusterIP` comum (um único IP virtual), a policy padrão do gRPC
+   (`pick_first`) fixa todo o tráfego no pod que o resolver DNS devolveu
+   naquele instante — réplicas extras nunca recebem requisição nenhuma.
+   Isso também explica por que a métrica de CPU do HPA (média entre
+   réplicas) nunca disparava: um pod sobrecarregado entre vários ociosos dá
+   uma média baixa.
+
+**Fix**: Service headless (`clusterIP: None`, DNS passa a devolver um IP por
+pod) para `patient-data-service`, `authorization-service` e
+`data-transform-service`, combinado com a policy `round_robin` do lado do
+cliente:
+
+- Go (`services/api-gateway/internal/clients/clients.go`): dial em
+  `"dns:///" + addr` (força o resolver DNS em vez de `passthrough`) +
+  `grpc.WithDefaultServiceConfig(`{"loadBalancingConfig":
+  [{"round_robin":{}}]}`)` + import em branco de
+  `google.golang.org/grpc/balancer/roundrobin` (registra a policy).
+- Python (`services/data-transform-service/src/client/patient_data_client.py`):
+  `grpc.aio.insecure_channel("dns:///" + address, options=[("grpc.lb_policy_name",
+  "round_robin")])`.
+
+`clusterIP` é campo imutável — converter um Service `ClusterIP` existente
+para headless exige `kubectl delete service ...` seguido de
+`kubectl apply -k k8s/`, não só `apply` por cima.
+
+Achados incidentais durante o rebuild das imagens (corrigidos porque a
+imagem já estava sendo reconstruída de qualquer forma):
+
+- Mesmo bug de ordem de `COPY` no `Dockerfile` do `data-transform-service`
+  já corrigido antes no `patient-data-service`: o builder cria um
+  `src/generated/__init__.py` vazio só via `touch` para o `protoc` ter onde
+  escrever; copiar o diretório `generated/` inteiro do builder por cima do
+  `src/` real sobrescrevia o `__init__.py` commitado (que tem lógica real
+  de `sys.path.insert`, necessária porque os stubs `_pb2` gerados usam
+  import absoluto entre si). Corrigido copiando o `src/` real primeiro e só
+  os 4 arquivos `_pb2`/`_pb2_grpc` do builder depois, nunca o diretório
+  inteiro. Os stubs commitados também estavam desatualizados em relação ao
+  `.proto` (faltavam `ListProjects`/`GetProject` e os campos de paginação)
+  — regenerados com `grpcio-tools==1.65.1` (pinned).
+- `TransformToFhir` fazia `list_encounters`/`get_clinical_events`
+  sequencialmente, mas as duas chamadas só dependem do `patient_id` (já
+  resolvido pela checagem `get_patient` anterior) — paralelizado com
+  `asyncio.gather`, cortando um round-trip da cadeia por requisição.
+
+**Resultado após o fix**: 50 VUs foi de ~90% de falha para **0% de falha**
+(100% de sucesso) depois do fix + o HPA escalar `patient-data-service` de 1
+para 10 réplicas sob carga real. `p(95)` de latência ainda cruza o limiar de
+2000ms do teste (2.99s) — sucesso funcional está garantido, ajuste fino de
+latência (ex.: aumentar `UPSTREAM_TIMEOUT_MS` ou otimizar consultas) fica
+como próximo passo, não bloqueador.
+
+## Execução das fases (atualizado 2026-07-12)
+
+- **Fase (a) validação funcional**: **concluída**. Bloqueio de JWT
+  resolvido (`admin-cli` + `scope=microprofile-jwt`, ver seção acima) — os
+  3 perfis (MEDICO/ESTAGIARIO/PESQUISADOR) exercitados fim-a-fim contra o
+  cluster real.
+- **Fase (b) testes de carga (k6)**: **em execução, com resultados**. 10
+  VUs: 97.87% sucesso, `p(95)=60.88ms`. 50 VUs: 100% sucesso (0% falha)
+  após o fix de pinagem gRPC acima, `p(95)=2.99s` (ainda acima do limiar de
+  2000ms do threshold, mas sem falhas funcionais). 100/500/1000 VUs:
+  pendente de execução/coleta.
+- **Fase (c) escalabilidade horizontal**: **concluída**. `api-gateway` →3,
+  `authorization-service` →2, `patient-data-service` →3 réplicas manuais
+  (antes do HPA assumir na fase d); causa raiz de por que escalar réplicas
+  isoladamente não bastava (pinagem de conexão gRPC) diagnosticada e
+  corrigida (ver seção acima).
+- **Fase (d) autoscaling (HPA)**: **concluída, com escala observada ao
+  vivo**. `k8s/hpa.yaml` aplicado (4 `HorizontalPodAutoscaler`, min 1 / max
+  10 / CPU 70%). Durante o burst de 50 VUs, `kubectl get hpa -w` capturou
+  escala real: `api-gateway` 146%/70% CPU → 1→3 réplicas; `patient-data-service`
+  150%/70% → 1→10 réplicas (bateu o teto `maxReplicas`); `data-transform-service`
+  108%/70% → 1→2 réplicas; `authorization-service` ficou abaixo do alvo
+  (~30% de pico) e não escalou além de 1. Todos voltaram ao mínimo após o
+  fim do burst (stabilization window). Falta observar o comportamento nos
+  níveis 100/500/1000 VUs, em especial se `patient-data-service` (já no
+  teto de 10) ou a `ResourceQuota` do namespace (`cota-grupo`: 3 cores
+  request / 6 cores limit) viram o gargalo real.
 - **Fase (e) observabilidade**: métricas dos 4 serviços confirmadas
   acessíveis (`/metrics` e `/q/metrics`, todos HTTP 200), ServiceMonitors
   corretos. Dashboards no Grafana seguem bloqueados por permissão

@@ -3,6 +3,10 @@
 Prometheus e Grafana já estão instalados a nível de cluster pelo professor
 (ver `orientacoes_sobre_clusterK8S.pdf`, item e) — o grupo não instala nada,
 só garante que os próprios pods sejam descobertos e importa os dashboards.
+Cobre a fase (e) da metodologia do enunciado (`PSPD2026.1_PPesq.pdf`), que
+pede pelo menos 5 métricas — a tabela de dashboards abaixo cobre
+requisições/s, latência, uso de CPU/memória, contagem de pods e erros
+HTTP/gRPC (mais que as 5 mínimas pedidas).
 
 ## Como o Prometheus do cluster encontra os pods
 

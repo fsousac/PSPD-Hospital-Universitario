@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Chip,
   Divider,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
@@ -18,12 +21,30 @@ export function Login() {
   const { isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
   const isMockMode = env.authMode === 'mock';
+  const isPasswordMode = env.authMode === 'password';
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   if (isAuthenticated && !isMockMode) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  function enterSystem() {
+  async function enterSystem(event) {
+    event?.preventDefault();
+    if (isPasswordMode) {
+      setError('');
+      setSubmitting(true);
+      try {
+        await login(username, password);
+      } catch (err) {
+        setError(err.message || 'Usuário ou senha inválidos.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     login();
     if (isMockMode) {
       navigate('/dashboard');
@@ -93,6 +114,8 @@ export function Login() {
         </Stack>
 
         <Paper
+          component="form"
+          onSubmit={enterSystem}
           sx={{
             alignSelf: 'center',
             border: '1px solid',
@@ -111,14 +134,36 @@ export function Login() {
               </Typography>
             </Stack>
 
+            {isPasswordMode && (
+              <Stack spacing={2}>
+                <TextField
+                  autoComplete="username"
+                  label="Usuário"
+                  onChange={(event) => setUsername(event.target.value)}
+                  required
+                  value={username}
+                />
+                <TextField
+                  autoComplete="current-password"
+                  label="Senha"
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  type="password"
+                  value={password}
+                />
+                {error && <Alert severity="error">{error}</Alert>}
+              </Stack>
+            )}
+
             <Button
+              disabled={submitting}
               endIcon={<ArrowForwardIcon />}
               fullWidth
-              onClick={enterSystem}
               size="large"
+              type="submit"
               variant="contained"
             >
-              Entrar no sistema
+              {submitting ? 'Entrando…' : 'Entrar no sistema'}
             </Button>
 
             <Divider />
