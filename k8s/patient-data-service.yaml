@@ -71,6 +71,12 @@ metadata:
   labels:
     app: patient-data-service
 spec:
+  # headless (sem ClusterIP): o client gRPC (api-gateway e
+  # data-transform-service) abre uma única conexão HTTP/2 de longa duração e
+  # a reaproveita — com ClusterIP normal, o DNS resolve pra 1 IP virtual só e
+  # o round_robin client-side não tem múltiplos IPs pra balancear entre
+  # réplicas. Ver docs/decisions/0005.
+  clusterIP: None
   selector:
     app: patient-data-service
   ports:

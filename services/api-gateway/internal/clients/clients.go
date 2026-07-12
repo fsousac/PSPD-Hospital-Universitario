@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc"
+	_ "google.golang.org/grpc/balancer/roundrobin" // registra a policy "round_robin" usada no service config abaixo
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -32,6 +33,14 @@ type Clients struct {
 func New(cfg config.Config) (*Clients, error) {
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		// round_robin: sem isso, a conexão HTTP/2 única (aberta uma vez e
+		// reaproveitada por todo o processo) fica pinada no primeiro pod que
+		// o resolver DNS devolver, e réplicas extras do backend nunca recebem
+		// tráfego. Exige Service headless (clusterIP: None) do lado do
+		// backend, senão o DNS resolve pra um único ClusterIP e o
+		// round_robin não tem o que balancear (ver k8s/*.yaml e
+		// docs/decisions/0005).
+		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
 	}
 
 	authConn, err := dial("authorization-service", cfg.AuthServiceAddr, opts)
@@ -56,7 +65,11 @@ func New(cfg config.Config) (*Clients, error) {
 }
 
 func dial(name, addr string, opts []grpc.DialOption) (*grpc.ClientConn, error) {
-	conn, err := grpc.NewClient(addr, opts...)
+	// dns:///: força o resolver DNS mesmo sem porta customizada — sem o
+	// esquema explícito, versões do grpc-go variam entre "dns" e
+	// "passthrough" como default, e passthrough nunca reconsulta múltiplos
+	// IPs (não há round_robin possível).
+	conn, err := grpc.NewClient("dns:///"+addr, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("dial %s (%s): %w", name, addr, err)
 	}

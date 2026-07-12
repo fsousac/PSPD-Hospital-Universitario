@@ -31,8 +31,7 @@ if _version_not_supported:
 
 
 class PatientDataServiceStub(object):
-    """--- Serviço ---
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -70,50 +69,65 @@ class PatientDataServiceStub(object):
                 request_serializer=patient__data__pb2.GetClinicalSummaryRequest.SerializeToString,
                 response_deserializer=patient__data__pb2.ClinicalSummaryRecord.FromString,
                 _registered_method=True)
+        self.ListProjects = channel.unary_unary(
+                '/hu.patientdata.v1.PatientDataService/ListProjects',
+                request_serializer=patient__data__pb2.ListProjectsRequest.SerializeToString,
+                response_deserializer=patient__data__pb2.ListProjectsResponse.FromString,
+                _registered_method=True)
+        self.GetProject = channel.unary_unary(
+                '/hu.patientdata.v1.PatientDataService/GetProject',
+                request_serializer=patient__data__pb2.GetProjectRequest.SerializeToString,
+                response_deserializer=patient__data__pb2.ProjectRecord.FromString,
+                _registered_method=True)
 
 
 class PatientDataServiceServicer(object):
-    """--- Serviço ---
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def GetPatient(self, request, context):
-        """Retorna os dados cadastrais de um paciente
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ListEncounters(self, request, context):
-        """Lista atendimentos de um paciente
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetClinicalEvents(self, request, context):
-        """Lista eventos clínicos de um paciente (diagnósticos, exames, medicações)
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetPatientsByCarer(self, request, context):
-        """Lista pacientes vinculados a um médico ou estagiário
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetCohortRaw(self, request, context):
-        """Retorna pacientes de uma condição clínica (para pesquisadores)
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetClinicalSummary(self, request, context):
-        """Resumo clínico completo de um paciente
-        """
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListProjects(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetProject(self, request, context):
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -151,6 +165,16 @@ def add_PatientDataServiceServicer_to_server(servicer, server):
                     request_deserializer=patient__data__pb2.GetClinicalSummaryRequest.FromString,
                     response_serializer=patient__data__pb2.ClinicalSummaryRecord.SerializeToString,
             ),
+            'ListProjects': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListProjects,
+                    request_deserializer=patient__data__pb2.ListProjectsRequest.FromString,
+                    response_serializer=patient__data__pb2.ListProjectsResponse.SerializeToString,
+            ),
+            'GetProject': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetProject,
+                    request_deserializer=patient__data__pb2.GetProjectRequest.FromString,
+                    response_serializer=patient__data__pb2.ProjectRecord.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'hu.patientdata.v1.PatientDataService', rpc_method_handlers)
@@ -160,8 +184,7 @@ def add_PatientDataServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class PatientDataService(object):
-    """--- Serviço ---
-    """
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
     def GetPatient(request,
@@ -315,6 +338,60 @@ class PatientDataService(object):
             '/hu.patientdata.v1.PatientDataService/GetClinicalSummary',
             patient__data__pb2.GetClinicalSummaryRequest.SerializeToString,
             patient__data__pb2.ClinicalSummaryRecord.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListProjects(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/hu.patientdata.v1.PatientDataService/ListProjects',
+            patient__data__pb2.ListProjectsRequest.SerializeToString,
+            patient__data__pb2.ListProjectsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetProject(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/hu.patientdata.v1.PatientDataService/GetProject',
+            patient__data__pb2.GetProjectRequest.SerializeToString,
+            patient__data__pb2.ProjectRecord.FromString,
             options,
             channel_credentials,
             insecure,

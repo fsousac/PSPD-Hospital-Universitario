@@ -71,6 +71,9 @@ metadata:
   labels:
     app: authorization-service
 spec:
+  # headless: mesma razão do patient-data-service (ver comentário lá e
+  # docs/decisions/0005) — o api-gateway mantém uma conexão gRPC persistente.
+  clusterIP: None
   selector:
     app: authorization-service
   ports:

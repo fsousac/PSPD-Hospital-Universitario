@@ -31,8 +31,7 @@ if _version_not_supported:
 
 
 class DataTransformServiceStub(object):
-    """--- Serviço ---
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -53,19 +52,16 @@ class DataTransformServiceStub(object):
 
 
 class DataTransformServiceServicer(object):
-    """--- Serviço ---
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def TransformToFhir(self, request, context):
-        """Transforma dados de um paciente em FHIR Bundle com nível de anonimização correto
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def AggregateForResearch(self, request, context):
-        """Produz bundle agregado para pesquisa (AGGREGATED/ANONYMIZED)
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -92,8 +88,7 @@ def add_DataTransformServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class DataTransformService(object):
-    """--- Serviço ---
-    """
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
     def TransformToFhir(request,

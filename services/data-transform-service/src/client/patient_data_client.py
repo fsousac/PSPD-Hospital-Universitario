@@ -47,7 +47,15 @@ def _pb_to_dict_event(ev) -> dict:
 
 class PatientDataClient:
     def __init__(self, address: str = PATIENT_DATA_SERVICE_URL):
-        self._channel = grpc.aio.insecure_channel(address)
+        # round_robin + dns:///: sem isso, o canal (aberto uma vez e
+        # reaproveitado por todo o processo) fica pinado no primeiro pod que
+        # o resolver DNS devolver — réplicas extras de patient-data-service
+        # nunca recebem tráfego deste client. Exige Service headless
+        # (clusterIP: None) do lado do patient-data-service (ver k8s/*.yaml).
+        self._channel = grpc.aio.insecure_channel(
+            "dns:///" + address,
+            options=[("grpc.lb_policy_name", "round_robin")],
+        )
         self._stub = pb2_grpc.PatientDataServiceStub(self._channel)
 
     async def close(self):
