@@ -491,6 +491,45 @@ para 10 réplicas sob carga real. `p(95)` de latência ainda cruza o limiar de
 latência (ex.: aumentar `UPSTREAM_TIMEOUT_MS` ou otimizar consultas) fica
 como próximo passo, não bloqueador.
 
+## [RESOLVIDO] Regressão de cold-start do `authorization-service` entre execuções (2026-07-12)
+
+Um retest isolado de 10 VUs (rodado bem depois do burst de 50 VUs acima, já
+com os pods estabilizados por vários minutos) voltou a falhar: 31.98% de
+erro, quase todo em `patients/{id}` (35% sucesso), com as falhas batendo
+exatamente no timeout de 5s enquanto as chamadas bem-sucedidas eram rápidas
+(p95 ≈167ms) — assinatura de "réplica sobrecarregada sozinha", não de bug de
+código (nada em `services/`/`k8s/`/`loadtests/` tinha mudado desde o teste
+de 10 VUs anterior, que passou com 97.87%).
+
+`kubectl get pods -n grupo-10` e `get hpa -n grupo-10` no momento confirmaram
+a causa: os 3 pods do `authorization-service` tinham só 3-4 minutos de
+idade, e o HPA mostrava `REPLICAS: 3` mesmo com CPU já baixa (3%/70%) —
+sinal de que ele tinha acabado de escalar de 1→3 **durante** esse próprio
+teste de 10 VUs, não antes.
+
+**Causa raiz**: `k8s/hpa.yaml` tinha `minReplicas: 1` para
+`authorization-service` nos 4 HPAs, igual aos outros 3 serviços. Depois de
+qualquer período ocioso (janela de estabilização do HPA, ~5min), ele reduz
+de volta para 1 réplica — desfazendo o baseline manual de 2 réplicas já
+provado necessário na fase (c) (`k8s/authorization-service.yaml`: "com 1
+réplica só, virou o gargalo de `/patients/{id}` sob 50 VUs"). A próxima
+rajada de carga então precisa escalar de novo, mas `authorization-service` é
+JVM (Quarkus) com `startupProbe` permitindo até 60s pra ficar pronto — mais
+que a duração de um cenário de teste (1-2min) inteiro. Como pods não-`Ready`
+não recebem tráfego (não entram nos Endpoints do Service), a única réplica
+original absorveu 100% da carga sozinha enquanto as 2 réplicas novas ainda
+inicializavam, reproduzindo o mesmo gargalo da fase (c) — um efeito colateral
+do próprio HPA da fase (d) desfazendo a correção da fase (c) em todo período
+ocioso entre execuções.
+
+**Fix**: `k8s/hpa.yaml` — `minReplicas` do `authorization-service` alterado
+de 1 para 2 (único dos 4 HPAs com esse valor; os outros continuam min 1).
+Mantém autoscaling real até `maxReplicas: 10` sob carga sustentada, mas
+garante o baseline "morno" de 2 réplicas o tempo todo, eliminando a janela
+de cold-start entre execuções de teste. Aplicado com
+`kubectl apply -f k8s/hpa.yaml -n grupo-10` (spec de HPA já existente,
+`apply` normal reflete a mudança sem precisar recriar o objeto).
+
 ## Execução das fases (atualizado 2026-07-12)
 
 - **Fase (a) validação funcional**: **concluída**. Bloqueio de JWT
@@ -500,16 +539,20 @@ como próximo passo, não bloqueador.
 - **Fase (b) testes de carga (k6)**: **em execução, com resultados**. 10
   VUs: 97.87% sucesso, `p(95)=60.88ms`. 50 VUs: 100% sucesso (0% falha)
   após o fix de pinagem gRPC acima, `p(95)=2.99s` (ainda acima do limiar de
-  2000ms do threshold, mas sem falhas funcionais). 100/500/1000 VUs:
-  pendente de execução/coleta.
+  2000ms do threshold, mas sem falhas funcionais). Um retest isolado de 10
+  VUs depois do burst de 50 regrediu (31.98% falha) por cold-start do
+  `authorization-service` entre execuções — corrigido (ver seção acima);
+  suíte completa a ser re-executada do zero (10/50/100/500/1000 VUs) com o
+  fix aplicado.
 - **Fase (c) escalabilidade horizontal**: **concluída**. `api-gateway` →3,
   `authorization-service` →2, `patient-data-service` →3 réplicas manuais
   (antes do HPA assumir na fase d); causa raiz de por que escalar réplicas
   isoladamente não bastava (pinagem de conexão gRPC) diagnosticada e
   corrigida (ver seção acima).
 - **Fase (d) autoscaling (HPA)**: **concluída, com escala observada ao
-  vivo**. `k8s/hpa.yaml` aplicado (4 `HorizontalPodAutoscaler`, min 1 / max
-  10 / CPU 70%). Durante o burst de 50 VUs, `kubectl get hpa -w` capturou
+  vivo**. `k8s/hpa.yaml` aplicado (4 `HorizontalPodAutoscaler`, max 10 / CPU
+  70%; min 2 só para `authorization-service`, min 1 nos outros 3 — ver
+  correção de cold-start acima). Durante o burst de 50 VUs, `kubectl get hpa -w` capturou
   escala real: `api-gateway` 146%/70% CPU → 1→3 réplicas; `patient-data-service`
   150%/70% → 1→10 réplicas (bateu o teto `maxReplicas`); `data-transform-service`
   108%/70% → 1→2 réplicas; `authorization-service` ficou abaixo do alvo

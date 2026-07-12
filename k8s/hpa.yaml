@@ -36,7 +36,17 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: authorization-service
-  minReplicas: 1
+  # min 2 (não 1, diferente dos outros 3 HPAs): authorization-service é JVM
+  # (Quarkus), com startupProbe permitindo até 60s pra ficar pronto — bem
+  # mais que a duração de um cenário de teste (1-2min). Com min:1, depois de
+  # qualquer período ocioso (janela de estabilização do HPA) ele volta pra 1
+  # réplica; a próxima rajada de carga dispara o scale-up, mas as réplicas
+  # novas não ficam prontas a tempo, e a única réplica original absorve 100%
+  # da carga sozinha — reproduzindo o mesmo gargalo de /patients/{id} sob
+  # carga já achado e corrigido manualmente na fase (c) (ver
+  # k8s/authorization-service.yaml). min:2 garante o baseline morno o tempo
+  # todo, sem abrir mão do autoscaling até 10 sob carga real sustentada.
+  minReplicas: 2
   maxReplicas: 10
   metrics:
     - type: Resource
