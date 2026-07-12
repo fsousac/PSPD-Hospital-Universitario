@@ -522,13 +522,14 @@ inicializavam, reproduzindo o mesmo gargalo da fase (c) — um efeito colateral
 do próprio HPA da fase (d) desfazendo a correção da fase (c) em todo período
 ocioso entre execuções.
 
-**Fix**: `k8s/hpa.yaml` — `minReplicas` do `authorization-service` alterado
-de 1 para 2 (único dos 4 HPAs com esse valor; os outros continuam min 1).
-Mantém autoscaling real até `maxReplicas: 10` sob carga sustentada, mas
-garante o baseline "morno" de 2 réplicas o tempo todo, eliminando a janela
-de cold-start entre execuções de teste. Aplicado com
-`kubectl apply -f k8s/hpa.yaml -n grupo-10` (spec de HPA já existente,
-`apply` normal reflete a mudança sem precisar recriar o objeto).
+**Fix (revertido depois, ver seção "[DECISÃO REVISADA]" mais abaixo)**:
+`k8s/hpa.yaml` — `minReplicas` do `authorization-service` alterado de 1
+para 2. Mantém autoscaling real até `maxReplicas: 10` sob carga sustentada,
+mas garante o baseline "morno" de 2 réplicas o tempo todo, eliminando a
+janela de cold-start entre execuções de teste — ao custo de manter
+recursos ociosos fora de janela de teste; depois substituído por uma
+correção na forma da carga do k6 (rampa gradual), que ataca a causa raiz
+sem esse custo permanente.
 
 `loadtests/run-scenarios.sh` também passou a esperar (até 150s) todos os
 pods do namespace ficarem `Ready` antes de cada um dos 5 cenários — mitiga
@@ -575,40 +576,127 @@ fim independente do resultado dos anteriores, com um aviso impresso por
 threshold cruzado; o código de saída do script só reflete o status
 agregado no final.
 
+## [RESOLVIDO] CPU é métrica cega para o gargalo real do api-gateway em 500 VUs (2026-07-12)
+
+Suíte completa (10/50/100/500/1000, com os 3 fixes de fase (b) já aplicados)
+rodou até o fim (fix do `run-scenarios.sh` não abortar mais no primeiro
+threshold cruzado, ver seção acima). Resultados: 10 VUs cruzou só
+`p(95)<2000` (2.09s) por ruído pontual do cluster compartilhado (mesma
+classe do outlier já discutido); **50 e 100 VUs colapsaram** (90.49% e
+94.68% de falha, respectivamente — a maioria batendo no timeout de 5s do
+gateway, um patamar abaixo do que já tínhamos validado limpo antes, sinal
+de que o ambiente compartilhado estava sob carga externa nesse momento, não
+regressão de código); **500 VUs colapsou muito mais** (97.92% de falha),
+mas de um jeito qualitativamente diferente: os erros eram `dial: i/o
+timeout` / `request timeout` **no cliente k6**, ou seja, a conexão TCP nem
+chegava a ser estabelecida — não é mais um 5xx/timeout do gateway
+processando a requisição, é uma falha de rede antes disso.
+
+`kubectl get hpa -n grupo-10 -w` durante o teste de 500 VUs mostrou
+`api-gateway` oscilando entre ~1-52% de CPU (nunca perto de 70%) — **e por
+isso nunca escalou além de 1 réplica**, apesar de 97.92% de falha ao mesmo
+tempo. Investigação do código (`services/api-gateway/`) descartou causas de
+aplicação: não há rate limiter que explique isso (o limiter existente,
+500rps/1000burst, devolve `429` numa conexão TCP já estabelecida — sintoma
+diferente do observado), nem pool/limite de conexões concorrentes no
+`http.Server` ou na cadeia de middlewares do chi.
+
+**Causa raiz**: `api-gateway` é I/O-bound — passa a maior parte do tempo
+bloqueado esperando resposta gRPC dos outros 3 serviços, não computando.
+Isso deixa a métrica de CPU estruturalmente cega ao gargalo real: com
+apenas 1 réplica (único ponto de entrada externo da aplicação, ADR decisão
+5), 500 conexões concorrentes miram o mesmo pod/IP — cenário clássico de
+esgotamento de portas SNAT/conntrack no roteamento do Service, que produz
+exatamente `dial: i/o timeout` sem nunca aparecer como uso de CPU.
+
+**Fix (revertido depois, ver seção seguinte)**: `k8s/hpa.yaml` —
+`minReplicas` do `api-gateway` alterado de 1 para 3 (mesmo valor já provado
+necessário manualmente na fase c). Mesma classe de correção do
+`authorization-service` (baseline mínimo que não depende de uma métrica que
+não reflete o gargalo real daquele serviço específico), aplicada a um
+sintoma diferente (rede/conexões em vez de cold-start de JVM). Não resolve
+a limitação de fundo (CPU-based HPA não é a métrica ideal pra um proxy
+I/O-bound — o ideal seria autoscaling por requisições em voo ou conexões
+ativas, o que exigiria um adaptador de métricas customizadas não
+confirmado como disponível neste cluster compartilhado) — fica registrado
+como limitação conhecida pro relatório, não bloqueador.
+
+## [DECISÃO REVISADA] `minReplicas` de volta pra 1 nos 4 — a rampa no k6 resolve sem gastar cota ociosa (2026-07-12)
+
+As duas seções acima (`authorization-service` min:2, `patient-data-service`
+e `api-gateway` min:3) tratavam o sintoma certo com a ferramenta errada:
+elevar o piso permanente de réplicas evita o cold-start, mas paga o custo
+**o tempo todo**, mesmo fora de janela de teste — real considerando que a
+`ResourceQuota` do namespace (`cota-grupo`: 3 cores request/6 cores limit)
+é compartilhada com os outros serviços e o frontend.
+
+A causa raiz de todos os 3 casos era a mesma: os cenários k6 saltavam de 0
+pro alvo de VUs **instantaneamente** (`--vus N`). Um degrau assim não dá a
+nenhum HPA (~15-30s de sync period) nem a nenhuma réplica nova (até 60s pra
+ficar `Ready`, pior caso JVM) uma janela real de reação, **não importa o
+valor do `minReplicas` ou do alvo de utilização** — só adiar o problema pra
+"depois que a réplica extra também ficar ociosa e for reduzida de novo".
+
+**Fix definitivo**: `loadtests/k6-scenario.js` passou a usar o executor
+`ramping-vus` (0 → VUS em `RAMP_UP`, default 30s, depois sustenta por
+`DURATION`) em vez do executor simples `--vus`/`--duration`. Isso ataca a
+causa raiz (forma da carga) em vez do sintoma (piso de réplicas), então os
+4 `HorizontalPodAutoscaler` voltaram para `minReplicas: 1` — sem gastar
+cota do namespace fora de janela de teste, e com o próprio `run-scenarios.sh`
+(`wait_for_cluster_ready`) garantindo que cada nível da suíte comece com o
+cluster já estabilizado do nível anterior.
+
 ## Execução das fases (atualizado 2026-07-12)
 
 - **Fase (a) validação funcional**: **concluída**. Bloqueio de JWT
   resolvido (`admin-cli` + `scope=microprofile-jwt`, ver seção acima) — os
   3 perfis (MEDICO/ESTAGIARIO/PESQUISADOR) exercitados fim-a-fim contra o
   cluster real.
-- **Fase (b) testes de carga (k6)**: **em execução, com resultados**. 10
-  VUs: 97.87% sucesso, `p(95)=60.88ms`. 50 VUs: 100% sucesso (0% falha)
-  após o fix de pinagem gRPC acima, `p(95)=2.99s` (ainda acima do limiar de
-  2000ms do threshold, mas sem falhas funcionais). Um retest isolado de 10
-  VUs depois do burst de 50 regrediu (31.98% falha) por cold-start do
-  `authorization-service` entre execuções — corrigido (`minReplicas: 2` +
-  espera de pods `Ready` antes de cada cenário, ver seções acima); o retest
-  seguinte zerou a falha mas ainda cruzava `p(95)<2000` (2.48s) por
-  "primeiro contato" com réplicas novas — corrigido com aquecimento em
-  `setup()` do k6 (ver seção acima). Suíte completa a ser re-executada do
-  zero (10/50/100/500/1000 VUs) com os 3 fixes aplicados.
+- **Fase (b) testes de carga (k6)**: **executada nos 5 níveis**. 10 VUs:
+  melhor caso 97.87-100% sucesso (thresholds de latência ocasionalmente
+  cruzados por ruído do cluster compartilhado, não falha funcional). 50
+  VUs: 100% sucesso (0% falha) validado após o fix de pinagem gRPC — mas
+  numa execução em sequência (10→50→100→500→1000 a partir de estado ocioso,
+  via `run-scenarios.sh`) o mesmo nível colapsou (90.49%), e 100 VUs
+  também (94.68%). Suspeita principal, ainda a confirmar no próximo rerun:
+  `patient-data-service` tinha `minReplicas: 1`, mesma causa raiz do
+  cold-start já visto no `authorization-service` — pool de conexões do
+  Postgres + atraso do resolver DNS do gRPC pra descobrir réplica nova —
+  não ruído do ambiente como inicialmente suposto. 500 VUs: colapso mais
+  severo (97.92%) com causa raiz distinta e real — `api-gateway` preso em 1
+  réplica porque CPU nunca reflete saturação de um serviço I/O-bound (ver
+  seção acima). 1000 VUs: ainda não coletado. Suíte completa a ser
+  re-executada do zero com o fix definitivo aplicado: rampa gradual de VUs
+  no k6 em vez de degrau instantâneo, mantendo `minReplicas: 1` nos 4
+  serviços (ver seção "[DECISÃO REVISADA]" abaixo). Conclusão parcial para
+  o relatório: a aplicação sustenta carga real (50 VUs validado limpo, 0%
+  falha, quando os pods já estão aquecidos), mas autoscaling reativo por si
+  só não é suficiente pra evitar regressão
+  entre execuções — CPU funciona bem para `patient-data-service`/`data-transform-service` (CPU-bound, queries
+  reais), mal para `api-gateway` (I/O-bound, proxy).
 - **Fase (c) escalabilidade horizontal**: **concluída**. `api-gateway` →3,
   `authorization-service` →2, `patient-data-service` →3 réplicas manuais
   (antes do HPA assumir na fase d); causa raiz de por que escalar réplicas
   isoladamente não bastava (pinagem de conexão gRPC) diagnosticada e
   corrigida (ver seção acima).
 - **Fase (d) autoscaling (HPA)**: **concluída, com escala observada ao
-  vivo**. `k8s/hpa.yaml` aplicado (4 `HorizontalPodAutoscaler`, max 10 / CPU
-  70%; min 2 só para `authorization-service`, min 1 nos outros 3 — ver
-  correção de cold-start acima). Durante o burst de 50 VUs, `kubectl get hpa -w` capturou
-  escala real: `api-gateway` 146%/70% CPU → 1→3 réplicas; `patient-data-service`
+  vivo e uma limitação real documentada**. `k8s/hpa.yaml` aplicado (4
+  `HorizontalPodAutoscaler`, min 1 / max 10 / CPU 70% — `minReplicas`
+  elevado por serviço foi tentado como mitigação de cold-start em alguns
+  casos e depois revertido de volta pra 1 em todos, a favor de corrigir a
+  forma da carga do k6 em vez do piso de réplicas, ver seção "[DECISÃO
+  REVISADA]" acima). Durante o burst de 50 VUs, `kubectl get hpa -w` capturou escala
+  real: `api-gateway` 146%/70% CPU → 1→3 réplicas; `patient-data-service`
   150%/70% → 1→10 réplicas (bateu o teto `maxReplicas`); `data-transform-service`
   108%/70% → 1→2 réplicas; `authorization-service` ficou abaixo do alvo
-  (~30% de pico) e não escalou além de 1. Todos voltaram ao mínimo após o
-  fim do burst (stabilization window). Falta observar o comportamento nos
-  níveis 100/500/1000 VUs, em especial se `patient-data-service` (já no
-  teto de 10) ou a `ResourceQuota` do namespace (`cota-grupo`: 3 cores
-  request / 6 cores limit) viram o gargalo real.
+  (~30% de pico) e não escalou além do mínimo. Em 500 VUs, `patient-data-service`
+  chegou a oscilar bem perto do alvo (67-68%/70%) sem cruzar — perto do
+  teto de capacidade real com 3 réplicas, mas sem gatilho de scale-up
+  (comportamento correto do HPA, a fórmula não arredonda pra cima sem
+  ultrapassar o alvo). `api-gateway` nunca cruzou 70% mesmo sob 97.92% de
+  falha — limitação de fundo do HPA baseado em CPU pra um serviço I/O-bound
+  (ver seção acima). Não bateu na `ResourceQuota` do namespace (`cota-grupo`:
+  3 cores request/6 cores limit) nos níveis testados até agora.
 - **Fase (e) observabilidade**: métricas dos 4 serviços confirmadas
   acessíveis (`/metrics` e `/q/metrics`, todos HTTP 200), ServiceMonitors
   corretos. Dashboards no Grafana seguem bloqueados por permissão

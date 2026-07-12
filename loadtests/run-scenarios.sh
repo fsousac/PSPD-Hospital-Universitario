@@ -14,6 +14,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DURATION="${DURATION:-1m}"
+RAMP_UP="${RAMP_UP:-30s}"
 NAMESPACE="${NAMESPACE:-grupo-10}"
 RESULTS_DIR="$SCRIPT_DIR/results"
 mkdir -p "$RESULTS_DIR"
@@ -40,16 +41,21 @@ wait_for_cluster_ready() {
 overall_status=0
 for vus in 10 50 100 500 1000; do
   wait_for_cluster_ready
-  echo "=== Cenário: ${vus} usuários simultâneos (duração ${DURATION}) ==="
+  echo "=== Cenário: ${vus} usuários simultâneos (rampa ${RAMP_UP} + ${DURATION}) ==="
   # k6 sai com código != 0 quando um threshold é cruzado (não é um crash) —
   # sem esse `if`, `set -e` abortaria a suíte inteira no primeiro nível que
   # cruzasse qualquer threshold, e os níveis seguintes (o dado mais
   # importante da fase b) nunca rodariam. Cada cenário roda até o fim
   # independente do resultado dos anteriores; o status geral só é reportado
   # no final (ver `exit` abaixo).
+  #
+  # -e VUS/-e DURATION (não --vus/--duration do CLI): o script define seu
+  # próprio executor `ramping-vus` em options.scenarios, que já controla os
+  # VUs internamente — misturar com --vus/--duration do k6 CLI conflita.
   if ! k6 run \
-    --vus "$vus" \
-    --duration "$DURATION" \
+    -e VUS="$vus" \
+    -e DURATION="$DURATION" \
+    -e RAMP_UP="$RAMP_UP" \
     --summary-export="$RESULTS_DIR/${vus}-vus.json" \
     "$SCRIPT_DIR/k6-scenario.js"; then
     echo "Aviso: threshold(s) cruzado(s) no cenário de ${vus} VUs — resultado salvo, seguindo para o próximo nível." >&2

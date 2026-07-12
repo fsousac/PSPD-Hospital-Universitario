@@ -6,6 +6,19 @@
 #
 # Depende de metrics-server estar instalado no cluster (`kubectl top nodes`
 # funcionando) — ver docs/decisions/0005, seção Riscos.
+#
+# minReplicas: 1 nos 4 — de propósito, para economizar recursos ociosos na
+# ResourceQuota compartilhada do namespace (`cota-grupo`: 3 cores request/6
+# cores limit). Uma tentativa anterior de fixar minReplicas alto (2-3) por
+# serviço para evitar cold-start entre execuções de teste foi revertida: o
+# problema real era a forma da carga do k6 (degrau instantâneo 0→N VUs), não
+# o piso de réplicas — um degrau não dá ao HPA (~15-30s de sync period) nem
+# à réplica nova (até 60s pra ficar `Ready`, JVM) nenhuma janela de reação,
+# não importa o mínimo configurado. Corrigido do lado do teste, não do HPA:
+# `loadtests/k6-scenario.js` agora sobe de 0 até o alvo de VUs gradualmente
+# (`RAMP_UP`, default 30s) antes da fase medida — dá tempo real de reagir e
+# a réplica nova ficar pronta antes do pico, sem manter baseline permanente
+# (ver docs/decisions/0005).
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -36,17 +49,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: authorization-service
-  # min 2 (não 1, diferente dos outros 3 HPAs): authorization-service é JVM
-  # (Quarkus), com startupProbe permitindo até 60s pra ficar pronto — bem
-  # mais que a duração de um cenário de teste (1-2min). Com min:1, depois de
-  # qualquer período ocioso (janela de estabilização do HPA) ele volta pra 1
-  # réplica; a próxima rajada de carga dispara o scale-up, mas as réplicas
-  # novas não ficam prontas a tempo, e a única réplica original absorve 100%
-  # da carga sozinha — reproduzindo o mesmo gargalo de /patients/{id} sob
-  # carga já achado e corrigido manualmente na fase (c) (ver
-  # k8s/authorization-service.yaml). min:2 garante o baseline morno o tempo
-  # todo, sem abrir mão do autoscaling até 10 sob carga real sustentada.
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 10
   metrics:
     - type: Resource

@@ -1,12 +1,21 @@
 // Cenário de carga único e parametrizável (k6) para o api-gateway do grupo10.
 // Cobre os 5 níveis de usuários simultâneos exigidos pelo enunciado
-// (10/50/100/500/1000) via a flag --vus / env VUS — não são 5 scripts.
+// (10/50/100/500/1000) via env VUS — não são 5 scripts.
 //
 // Uso:
-//   k6 run --vus 10 --duration 1m loadtests/k6-scenario.js
-//   k6 run --vus 100 --duration 2m -e USERNAME=pes.mendes -e PASSWORD=... loadtests/k6-scenario.js
+//   k6 run -e VUS=10 -e DURATION=1m loadtests/k6-scenario.js
+//   k6 run -e VUS=100 -e DURATION=2m -e USERNAME=pes.mendes -e PASSWORD=... loadtests/k6-scenario.js
 //
 // Variáveis de ambiente (todas com default para o usuário médico de teste):
+//   VUS          default 10. Alvo de usuários simultâneos (não usar --vus do
+//                k6 CLI — conflita com o executor `ramping-vus` definido
+//                abaixo, que já controla os VUs internamente).
+//   DURATION     default 1m. Duração da fase medida, depois da rampa.
+//   RAMP_UP      default 30s. Sobe de 0 até VUS gradualmente antes da fase
+//                medida — dá ao HPA (e a réplicas novas, ex.: JVM até 60s
+//                pra ficar Ready) uma janela real de reação, em vez de um
+//                degrau instantâneo 0→VUS que nenhum autoscaler consegue
+//                acompanhar a tempo (ver docs/decisions/0005).
 //   BASE_URL     default https://kiriland.unb.br/grupo10
 //   TOKEN_URL    default .../keycloak/realms/grupo10/protocol/openid-connect/token
 //   ACCESS_TOKEN JWT de aplicação já emitido (o id_token, não o access_token —
@@ -47,13 +56,35 @@ const PASSWORD = __ENV.PASSWORD || 'PseudoPEP2026!';
 const PATIENT_ID_ENV = __ENV.PATIENT_ID || '';
 const CONDITION = __ENV.CONDITION || 'diabetes_tipo_2';
 const PROJECT = __ENV.PROJECT || 'PRJ-G10-01';
+const TARGET_VUS = Number(__ENV.VUS || 10);
+const RAMP_UP = __ENV.RAMP_UP || '30s';
+const HOLD_DURATION = __ENV.DURATION || '1m';
 
+// Executor ramping-vus (0 → TARGET_VUS em RAMP_UP, depois sustenta por
+// HOLD_DURATION) em vez do executor simples --vus/--duration: uma subida
+// gradual dá ao HPA e às réplicas novas uma janela real pra reagir antes do
+// pico, em vez de um degrau instantâneo que nenhum autoscaler acompanha a
+// tempo — troca "manter réplicas sempre aquecidas" (custa cota do
+// namespace o tempo todo) por "escalar a tempo" (só custa recursos quando
+// há carga de verdade). Ver docs/decisions/0005 e k8s/hpa.yaml.
+//
 // Thresholds escopados na tag phase:main (só o default(), abaixo) — as
 // requisições de aquecimento em setup() não têm essa tag de propósito, para
 // não contaminar a métrica com o custo de "primeiro contato" (JIT frio do
 // authorization-service, conexões gRPC novas do round_robin pra réplicas
 // recém-escaladas pelo HPA). Ver comentário em setup().
 export const options = {
+  scenarios: {
+    default: {
+      executor: 'ramping-vus',
+      startVUs: 0,
+      stages: [
+        { duration: RAMP_UP, target: TARGET_VUS },
+        { duration: HOLD_DURATION, target: TARGET_VUS },
+      ],
+      gracefulRampDown: '30s',
+    },
+  },
   thresholds: {
     'http_req_failed{phase:main}': ['rate<0.05'],
     'http_req_duration{phase:main}': ['p(95)<2000'],

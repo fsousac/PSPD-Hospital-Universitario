@@ -16,6 +16,20 @@ medindo throughput, latência e taxa de erro via k6, e CPU/memória via Grafana.
 - Nada além disso: o script já faz login sozinho via client público
   `admin-cli` (confirmado que aceita password grant sem segredo nesse realm).
 
+## Rampa de subida (economia de recursos + autoscaling real)
+
+Cada cenário sobe de 0 até o alvo de VUs gradualmente (`RAMP_UP`, default
+30s — `../k8s/README.md`/`run-scenarios.sh` também aceitam a env var) antes
+da fase medida, em vez de saltar direto pro alvo. Isso é o que permite
+`k8s/hpa.yaml` manter `minReplicas: 1` nos 4 serviços (sem gastar cota do
+namespace com réplicas ociosas fora de teste): um degrau instantâneo
+0→N VUs não dá ao HPA (~15-30s de sync period) nem à réplica nova (até 60s
+pra ficar `Ready`, JVM) nenhuma janela real de reação — foi tentado manter
+`minReplicas` alto como mitigação, mas a causa era a forma da carga, não o
+piso de réplicas (ver `docs/decisions/0005-k8s-observability-design.md`).
+Com a rampa, o HPA tem tempo de escalar durante a subida e a fase medida já
+começa com capacidade adequada.
+
 ## Antes de rodar (fases c/d da metodologia)
 
 O `hpa.yaml` (`../k8s/hpa.yaml`) fica fora do `kustomization.yaml` de
@@ -55,20 +69,20 @@ parar no primeiro que falhar perderia justamente o dado mais interessante
 pro relatório (onde a capacidade real começa a degradar). Para um cenário avulso:
 
 ```bash
-k6 run --vus 100 --duration 2m k6-scenario.js
+k6 run -e VUS=100 -e DURATION=2m k6-scenario.js
 ```
 
 Para reaproveitar um token já emitido (deve ser o `id_token`, não o
 `access_token` — ver comentário em `k6-scenario.js`):
 
 ```bash
-k6 run --vus 100 --duration 2m -e ACCESS_TOKEN="$ID_TOKEN" k6-scenario.js
+k6 run -e VUS=100 -e DURATION=2m -e ACCESS_TOKEN="$ID_TOKEN" k6-scenario.js
 ```
 
 Perfil pesquisador (endpoint `/api/v1/research/aggregate`):
 
 ```bash
-k6 run --vus 100 --duration 2m \
+k6 run -e VUS=100 -e DURATION=2m \
   -e USERNAME=pes.mendes -e CONDITION=diabetes_tipo_2 -e PROJECT=PRJ-G10-01 \
   k6-scenario.js
 ```
