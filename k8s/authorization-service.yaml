@@ -5,7 +5,12 @@ metadata:
   labels:
     app: authorization-service
 spec:
-  replicas: 1
+  # 2 réplicas: toda chamada GetPatient/AggregateResearch faz uma decisão de
+  # autorização com round-trip ao Postgres (ver AuthorizationDecisionService);
+  # com 1 réplica só, virou o gargalo de /patients/{id} sob 50 VUs mesmo após
+  # escalar gateway/patient-data-service (docs/decisions/0005, fase b/c). 2 (e
+  # não 3) porque é JVM com footprint de memória maior que os outros serviços.
+  replicas: 2
   selector:
     matchLabels:
       app: authorization-service
