@@ -11,11 +11,17 @@
 //                k6 CLI — conflita com o executor `ramping-vus` definido
 //                abaixo, que já controla os VUs internamente).
 //   DURATION     default 1m. Duração da fase medida, depois da rampa.
-//   RAMP_UP      default 30s. Sobe de 0 até VUS gradualmente antes da fase
-//                medida — dá ao HPA (e a réplicas novas, ex.: JVM até 60s
-//                pra ficar Ready) uma janela real de reação, em vez de um
-//                degrau instantâneo 0→VUS que nenhum autoscaler consegue
-//                acompanhar a tempo (ver docs/decisions/0005).
+//   RAMP_UP_SECONDS  default 30. Sobe de 0 até VUS gradualmente (em
+//                segundos) antes da fase medida — dá ao HPA várias rodadas
+//                de reconciliação (~15s cada) e a réplicas novas (até 60s
+//                pra ficar Ready, JVM) uma janela real pra convergir antes
+//                do pico. Medido ao vivo: convergir de 1 réplica até a
+//                capacidade real pode levar 2-3 ciclos — para VUS mais
+//                altos, usar um valor maior (ex.: 90-120 para 500/1000, ver
+//                `run-scenarios.sh`). Requisições feitas durante a rampa
+//                não contam nos thresholds (tag phase:ramp, não phase:main
+//                — ver default() abaixo); só a fase medida (depois da
+//                rampa) conta, mesma lógica do aquecimento em setup().
 //   BASE_URL     default https://kiriland.unb.br/grupo10
 //   TOKEN_URL    default .../keycloak/realms/grupo10/protocol/openid-connect/token
 //   ACCESS_TOKEN JWT de aplicação já emitido (o id_token, não o access_token —
@@ -46,6 +52,7 @@
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import exec from 'k6/execution';
 
 const BASE_URL = __ENV.BASE_URL || 'https://kiriland.unb.br/grupo10';
 const TOKEN_URL = __ENV.TOKEN_URL || 'https://kiriland.unb.br/keycloak/realms/grupo10/protocol/openid-connect/token';
@@ -57,29 +64,31 @@ const PATIENT_ID_ENV = __ENV.PATIENT_ID || '';
 const CONDITION = __ENV.CONDITION || 'diabetes_tipo_2';
 const PROJECT = __ENV.PROJECT || 'PRJ-G10-01';
 const TARGET_VUS = Number(__ENV.VUS || 10);
-const RAMP_UP = __ENV.RAMP_UP || '30s';
+const RAMP_UP_SECONDS = Number(__ENV.RAMP_UP_SECONDS || 30);
 const HOLD_DURATION = __ENV.DURATION || '1m';
 
-// Executor ramping-vus (0 → TARGET_VUS em RAMP_UP, depois sustenta por
-// HOLD_DURATION) em vez do executor simples --vus/--duration: uma subida
-// gradual dá ao HPA e às réplicas novas uma janela real pra reagir antes do
-// pico, em vez de um degrau instantâneo que nenhum autoscaler acompanha a
-// tempo — troca "manter réplicas sempre aquecidas" (custa cota do
-// namespace o tempo todo) por "escalar a tempo" (só custa recursos quando
-// há carga de verdade). Ver docs/decisions/0005 e k8s/hpa.yaml.
+// Executor ramping-vus (0 → TARGET_VUS em RAMP_UP_SECONDS, depois sustenta
+// por HOLD_DURATION) em vez do executor simples --vus/--duration: uma
+// subida gradual dá ao HPA e às réplicas novas uma janela real pra
+// convergir antes do pico, em vez de um degrau instantâneo que nenhum
+// autoscaler acompanha a tempo — troca "manter réplicas sempre aquecidas"
+// (custa cota do namespace o tempo todo) por "escalar a tempo" (só custa
+// recursos quando há carga de verdade). Ver docs/decisions/0005 e
+// k8s/hpa.yaml.
 //
-// Thresholds escopados na tag phase:main (só o default(), abaixo) — as
-// requisições de aquecimento em setup() não têm essa tag de propósito, para
-// não contaminar a métrica com o custo de "primeiro contato" (JIT frio do
-// authorization-service, conexões gRPC novas do round_robin pra réplicas
-// recém-escaladas pelo HPA). Ver comentário em setup().
+// Thresholds escopados na tag phase:main (só o default(), abaixo, e só
+// depois de RAMP_UP_SECONDS já ter passado) — nem as requisições de
+// aquecimento em setup() nem as da própria rampa contam, para não
+// contaminar a métrica com o transiente de convergência do HPA (réplica
+// nova subindo, JIT frio, conexão gRPC nova). Ver comentário em setup() e
+// em default().
 export const options = {
   scenarios: {
     default: {
       executor: 'ramping-vus',
       startVUs: 0,
       stages: [
-        { duration: RAMP_UP, target: TARGET_VUS },
+        { duration: `${RAMP_UP_SECONDS}s`, target: TARGET_VUS },
         { duration: HOLD_DURATION, target: TARGET_VUS },
       ],
       gracefulRampDown: '30s',
@@ -161,7 +170,14 @@ export function setup() {
 }
 
 export default function (data) {
-  const params = { headers: { Authorization: `Bearer ${data.token}` }, tags: { phase: 'main' } };
+  // Requisição feita durante a rampa (RAMP_UP_SECONDS ainda não passou) não
+  // conta pros thresholds — mede só a fase sustentada, depois do HPA já ter
+  // tido tempo de convergir (ver options.thresholds acima).
+  const pastRampUp = exec.instance.currentTestRunDuration >= RAMP_UP_SECONDS * 1000;
+  const params = {
+    headers: { Authorization: `Bearer ${data.token}` },
+    tags: { phase: pastRampUp ? 'main' : 'ramp' },
+  };
 
   if (isPesquisador) {
     const res = http.get(

@@ -14,10 +14,30 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DURATION="${DURATION:-1m}"
-RAMP_UP="${RAMP_UP:-30s}"
 NAMESPACE="${NAMESPACE:-grupo-10}"
 RESULTS_DIR="$SCRIPT_DIR/results"
 mkdir -p "$RESULTS_DIR"
+
+# Rampa (segundos) por nível de VUs — mais VUs geram mais CPU, então o HPA
+# precisa de mais ciclos de reconciliação (~15s cada, ver k8s/hpa.yaml) pra
+# convergir da réplica única até a capacidade real. Medido ao vivo: 30s não
+# bastou nem para 50 VUs (patient-data-service levou ~3 ciclos, chegando a
+# 197%/70% de CPU no meio do caminho). Valores abaixo são um ponto de
+# partida empírico, ajustável por RAMP_UP_SECONDS_OVERRIDE se precisar.
+ramp_for() {
+  if [ -n "${RAMP_UP_SECONDS_OVERRIDE:-}" ]; then
+    echo "$RAMP_UP_SECONDS_OVERRIDE"
+    return
+  fi
+  case "$1" in
+    10) echo 15 ;;
+    50) echo 60 ;;
+    100) echo 75 ;;
+    500) echo 105 ;;
+    1000) echo 135 ;;
+    *) echo 30 ;;
+  esac
+}
 
 # Antes de cada cenário, espera todos os pods do namespace ficarem X/X Ready.
 # Sem isso, um pod recém-escalado pelo HPA (scale-up do cenário anterior
@@ -41,7 +61,8 @@ wait_for_cluster_ready() {
 overall_status=0
 for vus in 10 50 100 500 1000; do
   wait_for_cluster_ready
-  echo "=== Cenário: ${vus} usuários simultâneos (rampa ${RAMP_UP} + ${DURATION}) ==="
+  ramp="$(ramp_for "$vus")"
+  echo "=== Cenário: ${vus} usuários simultâneos (rampa ${ramp}s + ${DURATION}) ==="
   # k6 sai com código != 0 quando um threshold é cruzado (não é um crash) —
   # sem esse `if`, `set -e` abortaria a suíte inteira no primeiro nível que
   # cruzasse qualquer threshold, e os níveis seguintes (o dado mais
@@ -55,7 +76,7 @@ for vus in 10 50 100 500 1000; do
   if ! k6 run \
     -e VUS="$vus" \
     -e DURATION="$DURATION" \
-    -e RAMP_UP="$RAMP_UP" \
+    -e RAMP_UP_SECONDS="$ramp" \
     --summary-export="$RESULTS_DIR/${vus}-vus.json" \
     "$SCRIPT_DIR/k6-scenario.js"; then
     echo "Aviso: threshold(s) cruzado(s) no cenário de ${vus} VUs — resultado salvo, seguindo para o próximo nível." >&2

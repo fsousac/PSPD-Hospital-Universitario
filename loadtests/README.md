@@ -18,17 +18,19 @@ medindo throughput, latência e taxa de erro via k6, e CPU/memória via Grafana.
 
 ## Rampa de subida (economia de recursos + autoscaling real)
 
-Cada cenário sobe de 0 até o alvo de VUs gradualmente (`RAMP_UP`, default
-30s — `../k8s/README.md`/`run-scenarios.sh` também aceitam a env var) antes
-da fase medida, em vez de saltar direto pro alvo. Isso é o que permite
-`k8s/hpa.yaml` manter `minReplicas: 1` nos 4 serviços (sem gastar cota do
-namespace com réplicas ociosas fora de teste): um degrau instantâneo
-0→N VUs não dá ao HPA (~15-30s de sync period) nem à réplica nova (até 60s
-pra ficar `Ready`, JVM) nenhuma janela real de reação — foi tentado manter
-`minReplicas` alto como mitigação, mas a causa era a forma da carga, não o
-piso de réplicas (ver `docs/decisions/0005-k8s-observability-design.md`).
-Com a rampa, o HPA tem tempo de escalar durante a subida e a fase medida já
-começa com capacidade adequada.
+Cada cenário sobe de 0 até o alvo de VUs gradualmente (`RAMP_UP_SECONDS`,
+em segundos — `run-scenarios.sh` já escolhe um valor por nível de VUs, mais
+alto pra 500/1000, ver a função `ramp_for` nele) antes da fase medida, em
+vez de saltar direto pro alvo. Isso é o que permite `k8s/hpa.yaml` manter
+`minReplicas: 1` nos 4 serviços (sem gastar cota do namespace com réplicas
+ociosas fora de teste): um degrau instantâneo 0→N VUs não dá ao HPA
+(múltiplos ciclos de ~15s cada pra convergir, ver `k8s/hpa.yaml`) nem à
+réplica nova (até 60s pra ficar `Ready`, JVM) nenhuma janela real de reação
+— foi tentado manter `minReplicas` alto como mitigação, mas a causa era a
+forma da carga, não o piso de réplicas (ver
+`docs/decisions/0005-k8s-observability-design.md`). Requisições feitas
+durante a rampa não contam nos thresholds (tag `phase:ramp` em vez de
+`phase:main`) — só a fase sustentada depois da rampa é medida.
 
 ## Antes de rodar (fases c/d da metodologia)
 

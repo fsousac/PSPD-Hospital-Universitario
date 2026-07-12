@@ -638,13 +638,55 @@ valor do `minReplicas` ou do alvo de utilização** — só adiar o problema pra
 "depois que a réplica extra também ficar ociosa e for reduzida de novo".
 
 **Fix definitivo**: `loadtests/k6-scenario.js` passou a usar o executor
-`ramping-vus` (0 → VUS em `RAMP_UP`, default 30s, depois sustenta por
-`DURATION`) em vez do executor simples `--vus`/`--duration`. Isso ataca a
-causa raiz (forma da carga) em vez do sintoma (piso de réplicas), então os
-4 `HorizontalPodAutoscaler` voltaram para `minReplicas: 1` — sem gastar
+`ramping-vus` (0 → VUS em `RAMP_UP_SECONDS`, default 30s, depois sustenta
+por `DURATION`) em vez do executor simples `--vus`/`--duration`. Isso ataca
+a causa raiz (forma da carga) em vez do sintoma (piso de réplicas), então
+os 4 `HorizontalPodAutoscaler` voltaram para `minReplicas: 1` — sem gastar
 cota do namespace fora de janela de teste, e com o próprio `run-scenarios.sh`
 (`wait_for_cluster_ready`) garantindo que cada nível da suíte comece com o
 cluster já estabilizado do nível anterior.
+
+## [RESOLVIDO] 30s de rampa não bastava — convergência do HPA leva vários ciclos (2026-07-12)
+
+Depois de sincronizar o `hpa.yaml` reduzido (`kubectl apply` confirmado,
+`authorization-service` "configured", os outros já "unchanged") e rodar a
+suíte com a rampa de 30s do fix anterior, 50 e 100 VUs ainda colapsaram
+(72.27% e 88.04% de falha) — `iteration_duration` com mediana de 11s
+(ambas as chamadas da iteração batendo no timeout de 5s do gateway),
+sinal de saturação sustentada, não só um transiente no início.
+
+`kubectl get hpa -n grupo-10 -w` durante esse teste mostrou o motivo:
+`patient-data-service` foi de 1 réplica (CPU 133%/70%) → 2 réplicas (CPU
+ainda 197%/70%!) → 3 réplicas (193%/70%, só aí estabilizando perto de
+67-68%/70%) — **3 ciclos de reconciliação** pra convergir, cada um
+levando ~15-30s (sync period do HPA) mais o tempo de start do pod novo.
+No total, convergência real levou algo entre 60-90s — bem mais que os 30s
+de rampa dados. `authorization-service` teve o mesmo padrão (125%/70% →
+2 réplicas). Ou seja: a rampa de 30s até evitou o pior (degrau
+instantâneo), mas não deu tempo suficiente pro HPA terminar de convergir
+antes da fase medida (`hold`) começar.
+
+**Fix**: duas mudanças complementares, nenhuma custando recursos ociosos
+fora de janela de teste:
+
+1. `k8s/hpa.yaml` — `behavior.scaleUp` explícito nos 4 HPAs, mais agressivo
+   que o default do k8s (que só dobra a contagem de réplicas por ciclo de
+   15s): permite ir direto a até 400% da contagem atual (ou +8 pods, o que
+   for maior) por ciclo, sem `stabilizationWindowSeconds`. Reduz o número
+   de ciclos necessários pra convergir da mesma forma que dobrar exigiria.
+2. `loadtests/run-scenarios.sh` — rampa por nível de VUs em vez de um valor
+   fixo (`ramp_for()`: 15s/60s/75s/105s/135s para 10/50/100/500/1000),
+   dando tempo proporcional ao que a convergência de HPA realmente
+   demanda em cada patamar de carga. `RAMP_UP_SECONDS_OVERRIDE` permite
+   sobrescrever se a calibração precisar de ajuste fino depois.
+
+Como a rampa agora pode ser uma fração bem maior do tempo total do teste,
+`k6-scenario.js` também passou a tagear `phase:ramp` (não conta nos
+thresholds) enquanto `exec.instance.currentTestRunDuration` ainda não
+passou de `RAMP_UP_SECONDS`, e só marca `phase:main` (conta) depois disso
+— sem essa distinção, uma rampa longa dominando o tempo total do teste
+diluiria os números e mascararia se a capacidade sustentada real
+(`hold`) está adequada ou não.
 
 ## Execução das fases (atualizado 2026-07-12)
 

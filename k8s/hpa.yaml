@@ -12,13 +12,17 @@
 # cores limit). Uma tentativa anterior de fixar minReplicas alto (2-3) por
 # serviço para evitar cold-start entre execuções de teste foi revertida: o
 # problema real era a forma da carga do k6 (degrau instantâneo 0→N VUs), não
-# o piso de réplicas — um degrau não dá ao HPA (~15-30s de sync period) nem
-# à réplica nova (até 60s pra ficar `Ready`, JVM) nenhuma janela de reação,
-# não importa o mínimo configurado. Corrigido do lado do teste, não do HPA:
-# `loadtests/k6-scenario.js` agora sobe de 0 até o alvo de VUs gradualmente
-# (`RAMP_UP`, default 30s) antes da fase medida — dá tempo real de reagir e
-# a réplica nova ficar pronta antes do pico, sem manter baseline permanente
-# (ver docs/decisions/0005).
+# o piso de réplicas.
+#
+# behavior.scaleUp abaixo é mais agressivo que o default do k8s (que só
+# dobra a contagem de réplicas a cada 15s): permite ir direto a até 400% da
+# contagem atual (ou +8 pods, o que for maior) por ciclo de 15s, sem janela
+# de estabilização. Medido ao vivo: mesmo com rampa gradual no k6
+# (`RAMP_UP_SECONDS`), patient-data-service precisou de ~3 ciclos de reconciliação
+# (1→2→3 réplicas, CPU chegando a 197%/70% no meio do caminho) pra convergir
+# sob carga real — o default (dobrar por ciclo) é conservador demais pra
+# convergir dentro da janela de rampa de um teste de carga curto. Ver
+# docs/decisions/0005.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -31,6 +35,17 @@ spec:
     name: api-gateway
   minReplicas: 1
   maxReplicas: 10
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 400
+          periodSeconds: 15
+        - type: Pods
+          value: 8
+          periodSeconds: 15
+      selectPolicy: Max
   metrics:
     - type: Resource
       resource:
@@ -51,6 +66,17 @@ spec:
     name: authorization-service
   minReplicas: 1
   maxReplicas: 10
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 400
+          periodSeconds: 15
+        - type: Pods
+          value: 8
+          periodSeconds: 15
+      selectPolicy: Max
   metrics:
     - type: Resource
       resource:
@@ -71,6 +97,17 @@ spec:
     name: patient-data-service
   minReplicas: 1
   maxReplicas: 10
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 400
+          periodSeconds: 15
+        - type: Pods
+          value: 8
+          periodSeconds: 15
+      selectPolicy: Max
   metrics:
     - type: Resource
       resource:
@@ -91,6 +128,17 @@ spec:
     name: data-transform-service
   minReplicas: 1
   maxReplicas: 10
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 400
+          periodSeconds: 15
+        - type: Pods
+          value: 8
+          periodSeconds: 15
+      selectPolicy: Max
   metrics:
     - type: Resource
       resource:
