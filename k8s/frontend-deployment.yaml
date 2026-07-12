@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: hu-frontend
-  namespace: hu-observability
   labels:
     app.kubernetes.io/name: hu-frontend
     app.kubernetes.io/component: frontend

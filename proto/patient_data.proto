@@ -85,6 +85,30 @@ message ClinicalSummaryRecord {
   repeated ClinicalEventRecord medications       = 5;
 }
 
+// Projeto de pesquisa (tabela projects). Usado pelo pesquisador para listar
+// seus projetos e obter a condição clínica alvo de uma coorte.
+message ProjectRecord {
+  string project_id            = 1;
+  string title                 = 2;
+  string researcher_username   = 3;
+  string target_condition_code = 4;
+  string status                = 5; // APPROVED, EXPIRED, SUSPENDED, PENDING, REJECTED
+  string valid_until           = 6; // YYYY-MM-DD
+}
+
+message ListProjectsRequest {
+  // username do pesquisador (preferred_username do JWT); vazio = todos.
+  string researcher_username = 1;
+}
+
+message ListProjectsResponse {
+  repeated ProjectRecord projects = 1;
+}
+
+message GetProjectRequest {
+  string project_id = 1;
+}
+
 service PatientDataService {
   rpc GetPatient(GetPatientRequest)                returns (PatientRecord);
   rpc ListEncounters(ListEncountersRequest)         returns (ListEncountersResponse);
@@ -92,4 +116,6 @@ service PatientDataService {
   rpc GetPatientsByCarer(GetPatientsByCarerRequest) returns (PatientListResponse);
   rpc GetCohortRaw(GetCohortRawRequest)             returns (CohortRawResponse);
   rpc GetClinicalSummary(GetClinicalSummaryRequest) returns (ClinicalSummaryRecord);
+  rpc ListProjects(ListProjectsRequest)             returns (ListProjectsResponse);
+  rpc GetProject(GetProjectRequest)                 returns (ProjectRecord);
 }

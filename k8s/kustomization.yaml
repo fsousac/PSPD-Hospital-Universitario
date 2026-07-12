@@ -19,7 +19,6 @@ resources:
   - data-transform-service.yaml
   - ingress.yaml
   - servicemonitors.yaml
-  - frontend-namespace.yaml
   - frontend-configmap.yaml
   - frontend-deployment.yaml
   - frontend-service.yaml

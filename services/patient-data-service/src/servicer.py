@@ -7,7 +7,7 @@ from prometheus_client import Counter, Histogram
 
 from src.converters import event_to_dict, encounter_to_dict, patient_to_dict
 from src.database import get_session
-from src.models import ClinicalEvent, Encounter, Patient, UserPatientAssignment
+from src.models import ClinicalEvent, Encounter, Patient, Project, UserPatientAssignment
 from src.generated import patient_data_pb2 as pb2
 from src.generated import patient_data_pb2_grpc as pb2_grpc
 
@@ -40,6 +40,17 @@ def _encounter_to_pb(e: Encounter) -> pb2.EncounterRecord:
 
 def _event_to_pb(ev: ClinicalEvent) -> pb2.ClinicalEventRecord:
     return pb2.ClinicalEventRecord(**event_to_dict(ev))
+
+
+def _project_to_pb(p: Project) -> pb2.ProjectRecord:
+    return pb2.ProjectRecord(
+        project_id=p.project_id,
+        title=p.title,
+        researcher_username=p.researcher_username,
+        target_condition_code=p.target_condition_code,
+        status=p.status,
+        valid_until=p.valid_until.isoformat() if p.valid_until else "",
+    )
 
 
 class PatientDataServicer(pb2_grpc.PatientDataServiceServicer):
@@ -111,45 +122,21 @@ class PatientDataServicer(pb2_grpc.PatientDataServiceServicer):
                 t0 = time.perf_counter()
 
                 # carer_type vem do JWT (papel do Keycloak: "medico"/"estagiario"),
-                # diferente do valor da coluna assignment_type no banco
-                # ("ATTENDING"/"TRAINEE") — não é o mesmo vocabulário.
-                if request.carer_type == "estagiario":
-                    supervisor_stmt = (
-                        select(UserPatientAssignment.username)
-                        .where(
-                            and_(
-                                UserPatientAssignment.usuario_supervisor == request.username,
-                                UserPatientAssignment.tipo_vinculo == "ATTENDING",
-                                UserPatientAssignment.active.is_(True),
-                            )
+                # que é mapeado para o vocabulário da coluna assignment_type no
+                # banco ("ATTENDING"/"TRAINEE"). São vínculos diretos do cuidador
+                # com o paciente; o estagiário enxerga os pacientes dos quais é
+                # TRAINEE (supervisionados), o médico os que atende como ATTENDING.
+                assignment_type = "TRAINEE" if request.carer_type == "estagiario" else "ATTENDING"
+                patient_ids_stmt = (
+                    select(UserPatientAssignment.patient_id)
+                    .where(
+                        and_(
+                            UserPatientAssignment.username == request.username,
+                            UserPatientAssignment.tipo_vinculo == assignment_type,
+                            UserPatientAssignment.active.is_(True),
                         )
                     )
-                    supervisors = (await session.execute(supervisor_stmt)).scalars().all()
-
-                    patient_ids_stmt = (
-                        select(UserPatientAssignment.patient_id)
-                        .where(
-                            and_(
-                                UserPatientAssignment.username.in_(supervisors),
-                                UserPatientAssignment.tipo_vinculo == "ATTENDING",
-                                UserPatientAssignment.active.is_(True),
-                                UserPatientAssignment.username == request.username,
-                                UserPatientAssignment.tipo_vinculo == "estagiario",
-                                UserPatientAssignment.status == "ativo",
-                            )
-                        )
-                    )
-                else:
-                    patient_ids_stmt = (
-                        select(UserPatientAssignment.patient_id)
-                        .where(
-                            and_(
-                                UserPatientAssignment.username == request.username,
-                                UserPatientAssignment.tipo_vinculo == "ATTENDING",
-                                UserPatientAssignment.active.is_(True),
-                            )
-                        )
-                    )
+                )
 
                 patient_ids = (await session.execute(patient_ids_stmt)).scalars().all()
                 rows = (await session.execute(
@@ -227,3 +214,29 @@ class PatientDataServicer(pb2_grpc.PatientDataServiceServicer):
                 exams=exams,
                 medications=meds,
             )
+
+    async def ListProjects(self, request: pb2.ListProjectsRequest, context: grpc.aio.ServicerContext):
+        with self._track("ListProjects"):
+            async with get_session() as session:
+                stmt = select(Project).order_by(Project.project_id)
+                if request.researcher_username:
+                    stmt = stmt.where(Project.researcher_username == request.researcher_username)
+
+                t0 = time.perf_counter()
+                rows = (await session.execute(stmt)).scalars().all()
+                DB_QUERY_DURATION.labels(query="list_projects").observe(time.perf_counter() - t0)
+
+            return pb2.ListProjectsResponse(projects=[_project_to_pb(p) for p in rows])
+
+    async def GetProject(self, request: pb2.GetProjectRequest, context: grpc.aio.ServicerContext):
+        with self._track("GetProject"):
+            async with get_session() as session:
+                t0 = time.perf_counter()
+                project = await session.get(Project, request.project_id)
+                DB_QUERY_DURATION.labels(query="get_project").observe(time.perf_counter() - t0)
+
+            if project is None:
+                await context.abort(grpc.StatusCode.NOT_FOUND, f"Projeto {request.project_id} não encontrado")
+                return pb2.ProjectRecord()
+
+            return _project_to_pb(project)
