@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hu-frontend-config
+  namespace: hu-observability
+  labels:
+    app.kubernetes.io/name: hu-frontend
+    app.kubernetes.io/part-of: hu-observability
+data:
+  # Build-time defaults used while API Gateway is not available.
+  VITE_API_BASE_URL: "http://hu-frontend.local/api"
+  VITE_AUTH_MODE: "mock"
+  VITE_ENABLE_MOCKS: "true"
+  VITE_KEYCLOAK_URL: "http://keycloak.hu-observability.local"
+  VITE_KEYCLOAK_REALM: "hu"
+  VITE_KEYCLOAK_CLIENT_ID: "hu-frontend"
+

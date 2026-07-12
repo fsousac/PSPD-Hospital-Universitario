@@ -65,6 +65,7 @@ projetos `PRJ01` (Aprovado), `PRJ02` (Suspenso), `PRJ03` (expirado).
 | `PATIENT_DATA_SERVICE_ADDR` | `localhost:50052` | gRPC do Patient Data Service |
 | `DATA_TRANSFORM_SERVICE_ADDR` | `localhost:50053` | gRPC do Data Transform Service |
 | `OIDC_ISSUER_URL` | `http://localhost:8180/realms/hu` | Realm do Keycloak (descoberta OIDC) |
+| `OIDC_PUBLIC_ISSUER_URL` | *(vazio)* | Issuer público esperado quando a descoberta usa uma URL interna do Docker |
 | `OIDC_CLIENT_ID` | *(vazio)* | Audience esperado; vazio = checagem desligada |
 | `RATE_LIMIT_RPS` | `500` | Requisições/segundo do token bucket global |
 | `RATE_LIMIT_BURST` | `1000` | Rajada permitida |

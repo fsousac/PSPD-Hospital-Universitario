@@ -20,6 +20,7 @@ type Config struct {
 
 	// OIDC / Keycloak — usado para verificar o JWT na borda do gateway.
 	OIDCIssuerURL string // ex.: http://keycloak:8180/realms/hu
+	OIDCPublicIssuerURL string // issuer visto pelo navegador, ex.: http://localhost:8180/realms/hu
 	OIDCClientID  string // audience esperado; pode ser vazio (checagem desligada)
 
 	// Rate limiting global (token bucket) — protege o backend em testes de carga.
@@ -37,6 +38,7 @@ func Load() Config {
 		PatientDataServiceAddr:   env("PATIENT_DATA_SERVICE_ADDR", "localhost:50052"),
 		DataTransformServiceAddr: env("DATA_TRANSFORM_SERVICE_ADDR", "localhost:50053"),
 		OIDCIssuerURL:            env("OIDC_ISSUER_URL", "http://localhost:8180/realms/hu"),
+		OIDCPublicIssuerURL:      env("OIDC_PUBLIC_ISSUER_URL", ""),
 		OIDCClientID:             env("OIDC_CLIENT_ID", ""),
 		RateLimitRPS:             envFloat("RATE_LIMIT_RPS", 500),
 		RateLimitBurst:           envInt("RATE_LIMIT_BURST", 1000),

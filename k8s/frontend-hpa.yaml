@@ -1,0 +1,24 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hu-frontend
+  namespace: hu-observability
+  labels:
+    app.kubernetes.io/name: hu-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: hu-observability
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hu-frontend
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+

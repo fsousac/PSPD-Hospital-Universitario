@@ -133,6 +133,9 @@ class PatientDataServicer(pb2_grpc.PatientDataServiceServicer):
                                 UserPatientAssignment.username.in_(supervisors),
                                 UserPatientAssignment.tipo_vinculo == "ATTENDING",
                                 UserPatientAssignment.active.is_(True),
+                                UserPatientAssignment.username == request.username,
+                                UserPatientAssignment.tipo_vinculo == "estagiario",
+                                UserPatientAssignment.status == "ativo",
                             )
                         )
                     )
