@@ -65,6 +65,17 @@ k6 run --vus 100 --duration 2m \
   k6-scenario.js
 ```
 
+## Aquecimento antes da medição
+
+`setup()` faz 10 chamadas reais contra o mesmo pipeline (não contam nos
+thresholds — tag `phase:main` ausente de propósito, ver `k6-scenario.js`)
+antes da parte cronometrada começar. Sem isso, o "primeiro contato" com uma
+réplica recém-escalada pelo HPA (JIT ainda frio do `authorization-service`,
+conexão gRPC nova do `round_robin`) infla o p95 mesmo com 0% de falha — foi
+o caso de um p95=2.48s cruzando o threshold de 2000ms mesmo com todos os
+checks passando. Os thresholds (`http_req_duration{phase:main}`,
+`http_req_failed{phase:main}`) medem só a fase cronometrada de verdade.
+
 ## O que o k6 mede vs. o que vem do Grafana
 
 - **k6** (saída do próprio comando / `results/*.json`): throughput

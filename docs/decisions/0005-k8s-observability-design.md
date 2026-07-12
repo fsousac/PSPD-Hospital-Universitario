@@ -530,6 +530,32 @@ de cold-start entre execuções de teste. Aplicado com
 `kubectl apply -f k8s/hpa.yaml -n grupo-10` (spec de HPA já existente,
 `apply` normal reflete a mudança sem precisar recriar o objeto).
 
+`loadtests/run-scenarios.sh` também passou a esperar (até 150s) todos os
+pods do namespace ficarem `Ready` antes de cada um dos 5 cenários — mitiga
+o mesmo problema de forma geral (não só pro `authorization-service`), já
+que o mesmo padrão pode se repetir em qualquer serviço entre níveis de VU.
+
+## [RESOLVIDO] p95 inflado por "primeiro contato" mesmo com 0% de falha (2026-07-12)
+
+Com os dois fixes acima, o retest de 10 VUs foi de 31.98% pra **0% de
+falha** — mas `p(95)=2.48s` ainda cruzava o threshold de 2000ms, mesmo com
+todos os checks passando (`avg=701ms`, `med=304ms`, mas `p90=1.94s`). O pod
+Ready (probe de saúde OK) não significa "aquecido": JIT do
+`authorization-service` (JVM) ainda frio e conexões gRPC novas do
+`round_robin` (handshake TCP/HTTP2 pra réplicas que o HPA acabou de subir)
+custam caro na primeira chamada real — e como esse custo cai justamente nas
+primeiras requisições do teste, ele infla desproporcionalmente a cauda
+(p90/p95) de uma amostra pequena (10 VUs × 1min ≈ 500 requisições).
+
+**Fix**: `loadtests/k6-scenario.js` — `setup()` agora dispara 10 chamadas de
+aquecimento reais (mesmos endpoints do teste) contra o pipeline completo
+antes da fase cronometrada, tagueadas fora de `phase:main` de propósito. Os
+thresholds passaram a ser escopados na tag (`http_req_duration{phase:main}`,
+`http_req_failed{phase:main}`), medindo só as requisições do `default()`
+principal — prática padrão de teste de carga (medir regime, não o
+transiente de start), não uma forma de mascarar falha real (o aquecimento
+usa o mesmo `check()`/pipeline, só não conta pro threshold).
+
 ## Execução das fases (atualizado 2026-07-12)
 
 - **Fase (a) validação funcional**: **concluída**. Bloqueio de JWT
@@ -541,9 +567,12 @@ de cold-start entre execuções de teste. Aplicado com
   após o fix de pinagem gRPC acima, `p(95)=2.99s` (ainda acima do limiar de
   2000ms do threshold, mas sem falhas funcionais). Um retest isolado de 10
   VUs depois do burst de 50 regrediu (31.98% falha) por cold-start do
-  `authorization-service` entre execuções — corrigido (ver seção acima);
-  suíte completa a ser re-executada do zero (10/50/100/500/1000 VUs) com o
-  fix aplicado.
+  `authorization-service` entre execuções — corrigido (`minReplicas: 2` +
+  espera de pods `Ready` antes de cada cenário, ver seções acima); o retest
+  seguinte zerou a falha mas ainda cruzava `p(95)<2000` (2.48s) por
+  "primeiro contato" com réplicas novas — corrigido com aquecimento em
+  `setup()` do k6 (ver seção acima). Suíte completa a ser re-executada do
+  zero (10/50/100/500/1000 VUs) com os 3 fixes aplicados.
 - **Fase (c) escalabilidade horizontal**: **concluída**. `api-gateway` →3,
   `authorization-service` →2, `patient-data-service` →3 réplicas manuais
   (antes do HPA assumir na fase d); causa raiz de por que escalar réplicas

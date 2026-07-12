@@ -48,12 +48,19 @@ const PATIENT_ID_ENV = __ENV.PATIENT_ID || '';
 const CONDITION = __ENV.CONDITION || 'diabetes_tipo_2';
 const PROJECT = __ENV.PROJECT || 'PRJ-G10-01';
 
+// Thresholds escopados na tag phase:main (só o default(), abaixo) — as
+// requisições de aquecimento em setup() não têm essa tag de propósito, para
+// não contaminar a métrica com o custo de "primeiro contato" (JIT frio do
+// authorization-service, conexões gRPC novas do round_robin pra réplicas
+// recém-escaladas pelo HPA). Ver comentário em setup().
 export const options = {
   thresholds: {
-    http_req_failed: ['rate<0.05'],
-    http_req_duration: ['p(95)<2000'],
+    'http_req_failed{phase:main}': ['rate<0.05'],
+    'http_req_duration{phase:main}': ['p(95)<2000'],
   },
 };
+
+const isPesquisador = USERNAME.startsWith('pes.');
 
 // Login uma vez em setup() — o Keycloak não é o alvo do teste, só a origem
 // do token reaproveitado por todas as VUs/iterações.
@@ -98,26 +105,45 @@ export function setup() {
     }
   }
 
+  // Aquecimento: dispara chamadas reais contra o mesmo pipeline (gateway ->
+  // authorization-service -> patient-data-service -> data-transform-service)
+  // antes da medição com threshold começar. Sem isso, JIT ainda frio do
+  // authorization-service (JVM) e conexões gRPC novas (round_robin
+  // reconectando a réplicas que o HPA acabou de subir) inflam o p95 do
+  // início do teste sem refletir a latência em regime — já observado ao
+  // vivo (ver docs/decisions/0005). Sem tag "phase:main" de propósito: não
+  // conta nos thresholds acima, só serve pra "esquentar" o backend.
+  const headers = { Authorization: `Bearer ${token}` };
+  for (let i = 0; i < 10; i += 1) {
+    if (isPesquisador) {
+      http.get(`${BASE_URL}/api/v1/research/aggregate?condition=${CONDITION}&project=${PROJECT}`, { headers });
+    } else {
+      http.get(`${BASE_URL}/api/v1/me/patients`, { headers });
+      if (patientId) {
+        http.get(`${BASE_URL}/api/v1/patients/${patientId}`, { headers });
+      }
+    }
+    sleep(0.2);
+  }
+
   return { token, patientId };
 }
 
 export default function (data) {
-  const headers = { Authorization: `Bearer ${data.token}` };
-
-  const isPesquisador = USERNAME.startsWith('pes.');
+  const params = { headers: { Authorization: `Bearer ${data.token}` }, tags: { phase: 'main' } };
 
   if (isPesquisador) {
     const res = http.get(
       `${BASE_URL}/api/v1/research/aggregate?condition=${CONDITION}&project=${PROJECT}`,
-      { headers },
+      params,
     );
     check(res, { 'aggregate status 200': (r) => r.status === 200 });
   } else {
-    const listRes = http.get(`${BASE_URL}/api/v1/me/patients`, { headers });
+    const listRes = http.get(`${BASE_URL}/api/v1/me/patients`, params);
     check(listRes, { 'me/patients status 200': (r) => r.status === 200 });
 
     if (data.patientId) {
-      const patientRes = http.get(`${BASE_URL}/api/v1/patients/${data.patientId}`, { headers });
+      const patientRes = http.get(`${BASE_URL}/api/v1/patients/${data.patientId}`, params);
       check(patientRes, { 'patients/{id} status 200': (r) => r.status === 200 });
     }
   }
