@@ -556,6 +556,25 @@ principal — prática padrão de teste de carga (medir regime, não o
 transiente de start), não uma forma de mascarar falha real (o aquecimento
 usa o mesmo `check()`/pipeline, só não conta pro threshold).
 
+Mesmo com os 3 fixes, um rerun isolado de 10 VUs ainda cruzou
+`p(95)<2000ms` (2.69s, puxado por um único outlier de 11.74s) enquanto CPU e
+contagem de réplicas ficaram estáveis e baixos o teste inteiro (nenhum
+scale-event) — e um rerun manual imediatamente depois, nas mesmas
+condições, passou limpo (p95=205ms). Como não há correlação com CPU/réplica
+própria, a explicação mais provável é ruído do cluster **compartilhado**
+entre os 10 grupos da disciplina (rede/contenção num nó por outro grupo
+rodando teste ao mesmo tempo) — fora do nosso controle/código. Tratado como
+característica do ambiente de teste a documentar no relatório, não bug a
+perseguir indefinidamente.
+
+**Achado adicional**: `run-scenarios.sh` usava `set -euo pipefail`, e o k6
+sai com código != 0 quando um threshold é cruzado — a suíte estava
+abortando no primeiro nível (10 VUs) que cruzasse qualquer threshold e
+nunca chegava a rodar 50/100/500/1000. Corrigido: cada nível roda até o
+fim independente do resultado dos anteriores, com um aviso impresso por
+threshold cruzado; o código de saída do script só reflete o status
+agregado no final.
+
 ## Execução das fases (atualizado 2026-07-12)
 
 - **Fase (a) validação funcional**: **concluída**. Bloqueio de JWT

@@ -44,7 +44,15 @@ os pods do namespace (`grupo-10` por padrão, `NAMESPACE=` para mudar) ficarem
 passo é pulado silenciosamente. Evita medir uma réplica sobrecarregada
 sozinha enquanto o HPA ainda está subindo uma réplica nova (cold start),
 padrão de falso-negativo já visto nesta entrega (ver
-`../docs/decisions/0005-k8s-observability-design.md`). Para um cenário avulso:
+`../docs/decisions/0005-k8s-observability-design.md`).
+
+Um threshold cruzado em um nível **não** interrompe os demais — o script
+continua até rodar os 5 (10/50/100/500/1000) mesmo que algum deles falhe,
+salvando o resumo de todos; só o código de saída do script no final reflete
+se algum threshold foi cruzado. Isso é proposital: a fase (b) da metodologia
+pede os 5 níveis documentados, mesmo que nem todos os thresholds passem —
+parar no primeiro que falhar perderia justamente o dado mais interessante
+pro relatório (onde a capacidade real começa a degradar). Para um cenário avulso:
 
 ```bash
 k6 run --vus 100 --duration 2m k6-scenario.js

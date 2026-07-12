@@ -37,15 +37,26 @@ wait_for_cluster_ready() {
   echo "Aviso: nem todos os pods ficaram Ready em 150s — resultado pode refletir cold start, não capacidade real." >&2
 }
 
+overall_status=0
 for vus in 10 50 100 500 1000; do
   wait_for_cluster_ready
   echo "=== Cenário: ${vus} usuários simultâneos (duração ${DURATION}) ==="
-  k6 run \
+  # k6 sai com código != 0 quando um threshold é cruzado (não é um crash) —
+  # sem esse `if`, `set -e` abortaria a suíte inteira no primeiro nível que
+  # cruzasse qualquer threshold, e os níveis seguintes (o dado mais
+  # importante da fase b) nunca rodariam. Cada cenário roda até o fim
+  # independente do resultado dos anteriores; o status geral só é reportado
+  # no final (ver `exit` abaixo).
+  if ! k6 run \
     --vus "$vus" \
     --duration "$DURATION" \
     --summary-export="$RESULTS_DIR/${vus}-vus.json" \
-    "$SCRIPT_DIR/k6-scenario.js"
+    "$SCRIPT_DIR/k6-scenario.js"; then
+    echo "Aviso: threshold(s) cruzado(s) no cenário de ${vus} VUs — resultado salvo, seguindo para o próximo nível." >&2
+    overall_status=1
+  fi
   echo
 done
 
 echo "Resultados salvos em $RESULTS_DIR/. Cruzar com os dashboards do Grafana (CPU/memória) para o relatório."
+exit "$overall_status"
