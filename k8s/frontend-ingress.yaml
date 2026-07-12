@@ -7,16 +7,24 @@ metadata:
     app.kubernetes.io/component: frontend
     app.kubernetes.io/part-of: hu-observability
   annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    # Menor prioridade que o hu-gateway-ingress (10): esse path é catch-all,
+    # o gateway (api/healthz/readyz/metrics) precisa ser resolvido primeiro.
+    nginx.ingress.kubernetes.io/priority: "20"
 spec:
   ingressClassName: nginx
   rules:
-    - host: hu-frontend.local
+    # Catch-all de /grupo10: tudo que não é /grupo10/api,healthz,readyz,metrics
+    # (raiz, assets estáticos, rotas do SPA) — ver hu-gateway-ingress em
+    # k8s/ingress.yaml para os paths reservados ao gateway.
+    - host: kiriland.unb.br
       http:
         paths:
-          - path: /
-            pathType: Prefix
+          - path: /grupo10(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: hu-frontend

@@ -34,7 +34,7 @@ enableMocks().then(() => {
         <CssBaseline />
         <SnackbarProvider maxSnack={3} autoHideDuration={3500} anchorOrigin={{ vertical: 'top', horizontal: 'right' }}>
           <AppErrorBoundary>
-            <BrowserRouter>
+            <BrowserRouter basename={import.meta.env.BASE_URL}>
               <AuthProvider>
                 <App />
               </AuthProvider>

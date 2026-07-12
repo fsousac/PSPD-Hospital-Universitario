@@ -70,12 +70,36 @@ func NewVerifier(ctx context.Context, discoveryIssuerURL, expectedIssuerURL, cli
 	return &Verifier{verifier: provider.Verifier(cfg), expectedIssuer: strings.TrimRight(expectedIssuerURL, "/")}, nil
 }
 
-// realmAccess mapeia o claim realm_access.roles do Keycloak.
+// realmAccess mapeia os claims de papel do Keycloak: realm_access.roles no
+// caso normal, ou groups como fallback (ver rolesFromClaims).
 type realmAccess struct {
 	RealmAccess struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access"`
-	PreferredUsername string `json:"preferred_username"`
+	Groups            []string `json:"groups"`
+	PreferredUsername string   `json:"preferred_username"`
+}
+
+// knownRoles filtra ruído do claim "groups" (default-roles-*, offline_access,
+// uma_authorization) — só os 3 papéis de aplicação interessam.
+var knownRoles = map[string]bool{"medico": true, "estagiario": true, "pesquisador": true}
+
+// rolesFromClaims extrai os papéis do token. O realm compartilhado do
+// cluster (grupoXX) emite tokens "lightweight" sem "realm_access" — o papel
+// vem no claim "groups" (client scope microprofile-jwt) junto com ruído.
+// Ver docs/decisions/0005 e o mesmo fallback em
+// services/authorization-service TokenValidationService.extractRealmRoles.
+func rolesFromClaims(ra realmAccess) []string {
+	if len(ra.RealmAccess.Roles) > 0 {
+		return normalizeRoles(ra.RealmAccess.Roles)
+	}
+	var out []string
+	for _, g := range normalizeRoles(ra.Groups) {
+		if knownRoles[g] {
+			out = append(out, g)
+		}
+	}
+	return out
 }
 
 // Verify valida o token e retorna as claims relevantes.
@@ -97,7 +121,7 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (*Claims, error)
 	return &Claims{
 		Subject:  idToken.Subject,
 		Username: ra.PreferredUsername,
-		Roles:    normalizeRoles(ra.RealmAccess.Roles),
+		Roles:    rolesFromClaims(ra),
 		Raw:      rawToken,
 	}, nil
 }

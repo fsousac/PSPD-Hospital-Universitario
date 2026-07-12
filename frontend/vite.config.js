@@ -2,6 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
+  // Cluster compartilhado serve o app sob prefixo /grupoXX (ver k8s/frontend-ingress.yaml);
+  // localmente (dev/docker-compose) fica na raiz.
+  base: process.env.VITE_BASE_PATH || '/',
   plugins: [react()],
   server: {
     proxy: {

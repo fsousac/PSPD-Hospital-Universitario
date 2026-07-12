@@ -127,6 +127,9 @@ services:
       OIDC_PUBLIC_ISSUER_URL: http://localhost:8180/realms/hu
       RATE_LIMIT_RPS: "500"
       RATE_LIMIT_BURST: "1000"
+      # Só para dev local — nunca reaproveitar este valor no cluster real
+      # (ver k8s/secrets.env.example, COHORT_PSEUDONYM_KEY).
+      COHORT_PSEUDONYM_KEY: "dev-only-not-for-production-32bytes!!"
     ports:
       - "8000:8000"
     depends_on:

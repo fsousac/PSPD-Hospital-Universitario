@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -102,9 +103,18 @@ func (g *Gateway) ListMyPatients(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Paginação: usuários reais do seed de carga têm dezenas de milhares de
+	// vínculos — sem limit/offset, a lista inteira estoura timeout/memória
+	// (ver docs/decisions/0005). limit/offset ausentes ou inválidos viram 0,
+	// e o patient-data-service aplica seu próprio default/teto.
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+
 	req := &patientpb.GetPatientsByCarerRequest{
 		Username:  claims.Username,
 		CarerType: role,
+		Limit:     int32(limit),
+		Offset:    int32(offset),
 	}
 	ctx, cancel := g.upstreamCtx(r.Context())
 	defer cancel()
@@ -134,9 +144,12 @@ func (g *Gateway) ListMyPatients(w http.ResponseWriter, r *http.Request) {
 		out = append(out, item)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"role":     role,
-		"count":    len(out),
-		"patients": out,
+		"role":       role,
+		"count":      len(out),
+		"patients":   out,
+		"totalCount": resp.GetTotalCount(),
+		"limit":      resp.GetLimit(),
+		"offset":     resp.GetOffset(),
 	})
 }
 

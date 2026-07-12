@@ -59,6 +59,27 @@ class AuthorizationGrpcServiceIT {
     }
 
     @Test
+    void medicoComRoleViaGroupsClaimObtemAcessoFull() {
+        // Regressão: o realm compartilhado do cluster (grupoXX) emite tokens
+        // "lightweight" sem "realm_access" — o papel vem no claim "groups",
+        // misturado com ruído (default-roles-*, offline_access, uma_authorization).
+        // Ver TokenValidationService.extractRealmRoles e docs/decisions/0005.
+        String token = TestTokens.forUserGroups(
+                "dr.silva", "default-roles-grupo10", "offline_access", "MEDICO", "uma_authorization");
+
+        AuthorizeResponse response = client.authorize(AuthorizeRequest.newBuilder()
+                        .setJwtToken(token)
+                        .setResourceType(ResourceType.PATIENT)
+                        .setResourceId("P000001")
+                        .setAction(Action.READ)
+                        .build())
+                .await().indefinitely();
+
+        assertTrue(response.getAllowed());
+        assertEquals(AccessLevel.FULL, response.getAccessLevel());
+    }
+
+    @Test
     void medicoSemVinculoAtivoEDeny() {
         String token = TestTokens.forUser("dr.silva", "medico");
 

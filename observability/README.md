@@ -6,7 +6,17 @@ só garante que os próprios pods sejam descobertos e importa os dashboards.
 
 ## Como o Prometheus do cluster encontra os pods
 
-Todos os Deployments em `k8s/` têm, no `template.metadata.annotations`:
+O cluster usa Prometheus Operator e o namespace `grupo-10` tem permissão para
+criar `ServiceMonitor`. Por isso `k8s/servicemonitors.yaml` é o mecanismo
+primário de discovery, com um `ServiceMonitor` por serviço:
+
+```bash
+kubectl auth can-i create servicemonitors.monitoring.coreos.com -n grupo-10
+kubectl apply -k k8s/
+```
+
+Os Deployments em `k8s/` também mantêm annotations de scrape como redundância
+barata:
 
 ```yaml
 prometheus.io/scrape: "true"
@@ -14,16 +24,10 @@ prometheus.io/port: "<porta do /metrics ou /q/metrics do serviço>"
 prometheus.io/path: "/metrics"   # ou /q/metrics no authorization-service
 ```
 
-Essa é a convenção mais portável para service-discovery via
-`kubernetes_sd_configs` com `role: pod` — não depende de CRDs do Prometheus
-Operator (`ServiceMonitor`), que o namespace do grupo pode não ter permissão
-para criar (RBAC restrito, ver `kubeconfig-grupo-10.yaml`). **Se depois de
-implantado os pods não aparecerem como `up` no Prometheus**, o cluster
-provavelmente usa `role: endpoints`/`role: service` em vez de `role: pod`, ou
-exige `ServiceMonitor` — nesse caso, verificar com
-`kubectl api-resources | grep -i monitoring` se o CRD existe e criar um
-`ServiceMonitor` por serviço como alternativa (não incluído aqui até essa
-confirmação, ver `docs/decisions/0005-k8s-observability-design.md`).
+Se depois de implantado os targets não aparecerem como `up`, verificar se o
+Prometheus do professor seleciona `ServiceMonitor` por label. Nesse caso pode
+ser necessário adicionar o label esperado pelo operador do cluster, algo que
+depende da configuração global fora do namespace do grupo.
 
 ## Dashboards
 
@@ -49,8 +53,13 @@ real vier diferente do assumido.
    (ou upload do arquivo).
 3. Selecionar a datasource Prometheus do cluster quando solicitado.
 
-Import é manual (sem provisionamento automático) porque o Grafana é do
-cluster compartilhado, não algo que o grupo administra via K8s.
+**Confirmado**: o usuário `admgrp10` recebe `dashboards:write` e
+`folders:create` negados — só tem permissão de leitura, não dá pra importar
+nenhum dashboard hoje. É limitação de permissão no Grafana compartilhado,
+fora do nosso namespace/controle. Reportado ao professor pedindo Editor na
+conta `admgrp10` (ou uma pasta do grupo10 com permissão de escrita). Enquanto
+isso, os JSONs versionados aqui servem como evidência do dashboard planejado
+e podem ser importados assim que a permissão for corrigida.
 
 ## Riscos / a confirmar
 

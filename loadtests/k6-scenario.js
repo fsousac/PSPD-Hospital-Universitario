@@ -9,12 +9,23 @@
 // Variáveis de ambiente (todas com default para o usuário médico de teste):
 //   BASE_URL     default https://kiriland.unb.br/grupo10
 //   TOKEN_URL    default .../keycloak/realms/grupo10/protocol/openid-connect/token
-//   CLIENT_ID    default authorization-service (A CONFIRMAR contra o realm real —
-//                ver docs/decisions/0005-k8s-observability-design.md, seção Riscos)
+//   ACCESS_TOKEN JWT de aplicação já emitido (o id_token, não o access_token —
+//                ver nota abaixo). Se informado, o setup() não faz login.
+//   CLIENT_ID    default admin-cli. `authorization-service`/`account-console`
+//                não aceitam password grant sem segredo nesse realm — admin-cli
+//                é público e aceita (confirmado 2026-07-12, ver docs/decisions/0005).
 //   USERNAME     default med.cardoso
 //   PASSWORD     default PseudoPEP2026!
-//   PATIENT_ID   default P000001 (paciente vinculado a med.cardoso, ver
-//                db/migrations/003_cluster_seed_grupo10.sql)
+//   PATIENT_ID   se não informado, o setup() descobre um paciente real do
+//                USERNAME chamando /api/v1/me/patients uma vez (evita
+//                depender de um ID fixo que só existe no seed de dev local).
+//
+// NOTA sobre o token: o realm grupo10 emite access_token "lightweight" (sem
+// nenhuma claim de papel). O papel do usuário (MEDICO/ESTAGIARIO/PESQUISADOR)
+// só aparece no claim "groups" do id_token (pedindo scope=microprofile-jwt) —
+// por isso o setup() abaixo usa id_token, não access_token, como o JWT
+// enviado ao gateway. TokenValidationService.extractRealmRoles já sabe ler
+// "groups" como fallback (ver services/authorization-service).
 //
 // Para testar o perfil pesquisador, rodar com:
 //   -e USERNAME=pes.mendes -e CONDITION=diabetes_tipo_2 -e PROJECT=PRJ-G10-01
@@ -29,10 +40,11 @@ import { check, sleep } from 'k6';
 
 const BASE_URL = __ENV.BASE_URL || 'https://kiriland.unb.br/grupo10';
 const TOKEN_URL = __ENV.TOKEN_URL || 'https://kiriland.unb.br/keycloak/realms/grupo10/protocol/openid-connect/token';
-const CLIENT_ID = __ENV.CLIENT_ID || 'authorization-service';
+const ACCESS_TOKEN = __ENV.ACCESS_TOKEN || '';
+const CLIENT_ID = __ENV.CLIENT_ID || 'admin-cli';
 const USERNAME = __ENV.USERNAME || 'med.cardoso';
 const PASSWORD = __ENV.PASSWORD || 'PseudoPEP2026!';
-const PATIENT_ID = __ENV.PATIENT_ID || 'P000001';
+const PATIENT_ID_ENV = __ENV.PATIENT_ID || '';
 const CONDITION = __ENV.CONDITION || 'diabetes_tipo_2';
 const PROJECT = __ENV.PROJECT || 'PRJ-G10-01';
 
@@ -46,6 +58,10 @@ export const options = {
 // Login uma vez em setup() — o Keycloak não é o alvo do teste, só a origem
 // do token reaproveitado por todas as VUs/iterações.
 export function setup() {
+  if (ACCESS_TOKEN) {
+    return { token: ACCESS_TOKEN };
+  }
+
   const res = http.post(
     TOKEN_URL,
     {
@@ -53,18 +69,36 @@ export function setup() {
       client_id: CLIENT_ID,
       username: USERNAME,
       password: PASSWORD,
+      scope: 'openid microprofile-jwt',
     },
     { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
   );
 
-  check(res, { 'login obteve token': (r) => r.status === 200 && !!r.json('access_token') });
+  check(res, { 'login obteve token': (r) => r.status === 200 && !!r.json('id_token') });
   if (res.status !== 200) {
     throw new Error(
       `Falha no login (status ${res.status}): ${res.body}. ` +
-        'Verifique CLIENT_ID/USERNAME/PASSWORD — ver docs/decisions/0005, seção Riscos.',
+        'Verifique CLIENT_ID/USERNAME/PASSWORD ou informe ACCESS_TOKEN. ' +
+        'Se o realm exigir client secret, a correção é externa ao script.',
     );
   }
-  return { token: res.json('access_token') };
+  // id_token (não access_token): só ele carrega o claim "groups" nesse realm — ver nota no topo do arquivo.
+  const token = res.json('id_token');
+
+  // Descobre um patient_id real do USERNAME (evita depender de um ID fixo
+  // que só existe no seed de dev local — ver nota no topo do arquivo).
+  let patientId = PATIENT_ID_ENV;
+  if (!patientId && !USERNAME.startsWith('pes.')) {
+    const listRes = http.get(`${BASE_URL}/api/v1/me/patients`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const patients = listRes.json('patients') || [];
+    if (patients.length > 0) {
+      patientId = patients[0].patient_id;
+    }
+  }
+
+  return { token, patientId };
 }
 
 export default function (data) {
@@ -82,8 +116,10 @@ export default function (data) {
     const listRes = http.get(`${BASE_URL}/api/v1/me/patients`, { headers });
     check(listRes, { 'me/patients status 200': (r) => r.status === 200 });
 
-    const patientRes = http.get(`${BASE_URL}/api/v1/patients/${PATIENT_ID}`, { headers });
-    check(patientRes, { 'patients/{id} status 200': (r) => r.status === 200 });
+    if (data.patientId) {
+      const patientRes = http.get(`${BASE_URL}/api/v1/patients/${data.patientId}`, { headers });
+      check(patientRes, { 'patients/{id} status 200': (r) => r.status === 200 });
+    }
   }
 
   sleep(1);

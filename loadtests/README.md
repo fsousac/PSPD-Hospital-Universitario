@@ -10,9 +10,11 @@ medindo throughput, latência e taxa de erro via k6, e CPU/memória via Grafana.
   ssh -p 10200 <matricula>@kiriland.unb.br
   ```
 - Aplicação implantada no cluster e acessível em
-  `https://kiriland.unb.br/grupo10` (ver `k8s/`).
+  `https://kiriland.unb.br/grupo10/api/v1/...` (ver `k8s/`).
 - Um usuário de teste válido no realm `grupo10` do Keycloak (ver tabela em
   `orientacoes_sobre_clusterK8S.pdf` — ex. `med.cardoso` / `PseudoPEP2026!`).
+- Nada além disso: o script já faz login sozinho via client público
+  `admin-cli` (confirmado que aceita password grant sem segredo nesse realm).
 
 ## Rodando
 
@@ -26,6 +28,13 @@ Isso roda os 5 cenários em sequência e salva um resumo JSON por cenário em
 
 ```bash
 k6 run --vus 100 --duration 2m k6-scenario.js
+```
+
+Para reaproveitar um token já emitido (deve ser o `id_token`, não o
+`access_token` — ver comentário em `k6-scenario.js`):
+
+```bash
+k6 run --vus 100 --duration 2m -e ACCESS_TOKEN="$ID_TOKEN" k6-scenario.js
 ```
 
 Perfil pesquisador (endpoint `/api/v1/research/aggregate`):
@@ -49,8 +58,9 @@ k6 run --vus 100 --duration 2m \
 
 ## Troubleshooting
 
-Se `setup()` falhar no login (`Falha no login`), o `CLIENT_ID` default
-(`authorization-service`) provavelmente não existe/não permite password-grant
-no realm `grupo10` — ver a seção "Riscos" de
-`docs/decisions/0005-k8s-observability-design.md` para os próximos passos de
-investigação (não é algo resolvível só neste script).
+Se `setup()` falhar no login (`Falha no login`) com o `CLIENT_ID` default
+(`admin-cli`), o mais provável é usuário/senha errados — confirme contra a
+tabela de usuários do enunciado. `authorization-service`/`account-console` só
+funcionam com `CLIENT_ID` explícito se o professor fornecer o client secret
+(`authorization-service` é confidencial) ou habilitar Direct Access Grants
+(`account-console`) — ver docs/decisions/0005-k8s-observability-design.md.

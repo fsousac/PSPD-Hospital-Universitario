@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
@@ -196,7 +197,7 @@ func (g *Gateway) ProjectCohort(w http.ResponseWriter, r *http.Request) {
 	patients := make([]map[string]any, 0, len(cohort.GetPatients()))
 	for _, p := range cohort.GetPatients() {
 		patients = append(patients, map[string]any{
-			"pseudonymId": pseudonym(p.GetPatientId()),
+			"pseudonymId": g.pseudonym(p.GetPatientId(), projectID),
 			"ageRange":    ageBand(p.GetBirthDate()),
 			"gender":      p.GetGender(),
 			"condition":   condition,
@@ -209,11 +210,18 @@ func (g *Gateway) ProjectCohort(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// pseudonym gera um identificador estável e não reversível a partir do
-// patient_id (SHA-256 truncado), no formato "anon-xxxxxxxx".
-func pseudonym(patientID string) string {
-	sum := sha256.Sum256([]byte(patientID))
-	return "anon-" + hex.EncodeToString(sum[:])[:8]
+// pseudonym gera um identificador estável a partir do patient_id, usando um
+// HMAC-SHA256 com chave secreta do servidor (não SHA-256 puro: patient_id
+// segue um formato enumerável — "P" + dígitos sequenciais — então um hash
+// sem chave é reversível por força bruta/rainbow table sobre o espaço de
+// ~150 mil IDs conhecidos, o que anularia a garantia de anonimização do
+// nível de acesso ANONYMIZED). O projectID entra no HMAC para que o mesmo
+// paciente gere pseudônimos diferentes em coortes de projetos diferentes
+// (evita cruzar dados entre projetos de pesquisa distintos).
+func (g *Gateway) pseudonym(patientID, projectID string) string {
+	m := hmac.New(sha256.New, g.cfg.CohortPseudonymKey)
+	m.Write([]byte(projectID + ":" + patientID))
+	return "anon-" + hex.EncodeToString(m.Sum(nil))[:32]
 }
 
 // ageBand converte uma data de nascimento "YYYY-MM-DD" na faixa etária usada

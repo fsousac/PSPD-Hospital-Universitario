@@ -17,4 +17,17 @@ public final class TestTokens {
                 .claim("realm_access", Map.of("roles", List.of(roles)))
                 .sign();
     }
+
+    /**
+     * Simula o formato "lightweight" do realm compartilhado do cluster
+     * (grupoXX): sem "realm_access", papel misturado com ruído dentro de
+     * "groups" (default-roles-*, offline_access, uma_authorization).
+     */
+    public static String forUserGroups(String username, String... groups) {
+        return Jwt.issuer("https://issuer.test/realms/hu")
+                .subject(username)
+                .claim("preferred_username", username)
+                .claim("groups", List.of(groups))
+                .sign();
+    }
 }

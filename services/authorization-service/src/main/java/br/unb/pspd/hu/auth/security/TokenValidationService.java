@@ -19,6 +19,10 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 @ApplicationScoped
 public class TokenValidationService {
 
+    // Papéis de aplicação reconhecidos, para filtrar ruído do claim "groups"
+    // (default-roles-*, offline_access, uma_authorization — ver extractRealmRoles).
+    private static final Set<String> KNOWN_ROLES = Set.of("medico", "estagiario", "pesquisador");
+
     @Inject
     JWTParser jwtParser;
 
@@ -47,6 +51,25 @@ public class TokenValidationService {
             // mas o realm compartilhado do cluster (grupoXX) provisiona MEDICO/
             // ESTAGIARIO/PESQUISADOR em maiúsculas. Comparação é sempre lowercase.
             rolesArray.forEach(value -> roles.add(value.toString().replace("\"", "").toLowerCase()));
+            return roles;
+        }
+
+        // Fallback: o realm compartilhado do cluster emite tokens "lightweight"
+        // sem "realm_access", mas o claim "groups" (client scope microprofile-jwt)
+        // carrega o papel junto com ruído (default-roles-*, offline_access,
+        // uma_authorization) — filtramos para KNOWN_ROLES. Ver docs/decisions/0005.
+        // "groups" é claim padrão do MicroProfile JWT (diferente de "realm_access",
+        // que é custom do Keycloak) — o JsonWebToken já desserializa como
+        // Set<String> via getGroups(), não como JsonArray (getClaim daria
+        // ClassCastException: HashSet -> JsonArray).
+        Set<String> groups = jwt.getGroups();
+        if (groups != null) {
+            groups.forEach(value -> {
+                String group = value.toLowerCase();
+                if (KNOWN_ROLES.contains(group)) {
+                    roles.add(group);
+                }
+            });
         }
         return roles;
     }

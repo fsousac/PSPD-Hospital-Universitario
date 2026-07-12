@@ -33,6 +33,11 @@ spec:
           env:
             - name: GATEWAY_LISTEN_ADDR
               value: ":8000"
+            - name: COHORT_PSEUDONYM_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hu-db-credentials
+                  key: COHORT_PSEUDONYM_KEY
           resources:
             requests:
               cpu: "100m"

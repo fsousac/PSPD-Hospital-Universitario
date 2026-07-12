@@ -2,7 +2,7 @@ import logging
 import time
 
 import grpc
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from prometheus_client import Counter, Histogram
 
 from src.converters import event_to_dict, encounter_to_dict, patient_to_dict
@@ -28,6 +28,13 @@ DB_QUERY_DURATION = Histogram(
     "Duração das queries ao banco de dados",
     ["query"],
 )
+
+
+# Paginação de GetPatientsByCarer: o seed de carga real tem usuários com
+# dezenas de milhares de vínculos (ver docs/decisions/0005) — sem teto, uma
+# única chamada serializa a base inteira e estoura timeout/memória.
+DEFAULT_PAGE_SIZE = 50
+MAX_PAGE_SIZE = 200
 
 
 def _patient_to_pb(p: Patient) -> pb2.PatientRecord:
@@ -126,25 +133,48 @@ class PatientDataServicer(pb2_grpc.PatientDataServiceServicer):
                 # banco ("ATTENDING"/"TRAINEE"). São vínculos diretos do cuidador
                 # com o paciente; o estagiário enxerga os pacientes dos quais é
                 # TRAINEE (supervisionados), o médico os que atende como ATTENDING.
+                #
+                # JOIN único em vez de (1) buscar patient_ids e (2) buscar
+                # Patient com WHERE ... IN (...) desses ids: com seed de carga
+                # real (dezenas de milhares de vínculos por usuário), o IN
+                # gigante da segunda query passava do timeout de 5s do
+                # api-gateway sozinho. Ver docs/decisions/0005.
                 assignment_type = "TRAINEE" if request.carer_type == "estagiario" else "ATTENDING"
-                patient_ids_stmt = (
-                    select(UserPatientAssignment.patient_id)
-                    .where(
-                        and_(
-                            UserPatientAssignment.username == request.username,
-                            UserPatientAssignment.tipo_vinculo == assignment_type,
-                            UserPatientAssignment.active.is_(True),
-                        )
-                    )
+                filters = and_(
+                    UserPatientAssignment.username == request.username,
+                    UserPatientAssignment.tipo_vinculo == assignment_type,
+                    UserPatientAssignment.active.is_(True),
                 )
 
-                patient_ids = (await session.execute(patient_ids_stmt)).scalars().all()
-                rows = (await session.execute(
-                    select(Patient).where(Patient.patient_id.in_(patient_ids))
-                )).scalars().all()
+                limit = request.limit if request.limit > 0 else DEFAULT_PAGE_SIZE
+                limit = min(limit, MAX_PAGE_SIZE)
+                offset = max(request.offset, 0)
+
+                count_stmt = (
+                    select(func.count())
+                    .select_from(UserPatientAssignment)
+                    .where(filters)
+                )
+                total_count = (await session.execute(count_stmt)).scalar_one()
+
+                stmt = (
+                    select(Patient)
+                    .join(UserPatientAssignment, UserPatientAssignment.patient_id == Patient.patient_id)
+                    .where(filters)
+                    .order_by(Patient.patient_id)
+                    .limit(limit)
+                    .offset(offset)
+                )
+
+                rows = (await session.execute(stmt)).scalars().all()
                 DB_QUERY_DURATION.labels(query="get_patients_by_carer").observe(time.perf_counter() - t0)
 
-            return pb2.PatientListResponse(patients=[_patient_to_pb(p) for p in rows])
+            return pb2.PatientListResponse(
+                patients=[_patient_to_pb(p) for p in rows],
+                total_count=total_count,
+                limit=limit,
+                offset=offset,
+            )
 
     async def GetCohortRaw(self, request: pb2.GetCohortRawRequest, context: grpc.aio.ServicerContext):
         with self._track("GetCohortRaw"):

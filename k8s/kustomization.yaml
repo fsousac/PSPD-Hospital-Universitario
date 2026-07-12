@@ -25,6 +25,18 @@ resources:
   - frontend-ingress.yaml
   - frontend-hpa.yaml
 
+# frontend-namespace.yaml foi removido de propósito: criava um Namespace
+# cluster-scoped separado (hu-observability), que o kustomize NÃO renomeia
+# (o transformer `namespace: grupo-10` acima só afeta recursos namespaced) —
+# em um cluster compartilhado sem permissão de criar namespaces, isso
+# provavelmente falharia com Forbidden e abortaria o `kubectl apply -k`
+# inteiro, não só o frontend. O frontend usa o mesmo namespace grupo-10.
+
+# frontend-ingress.yaml e ingress.yaml (gateway) dividem o path /grupo10 pelo
+# mesmo host — o gateway ficou restrito a /grupo10/(api/.*|healthz|readyz|metrics)
+# (priority 10) e o frontend é o catch-all do resto (priority 20). Validado
+# ao vivo (curl nos dois paths) em 2026-07-12 — ver docs/decisions/0005.
+
 # O Secret hu-db-credentials NÃO é gerenciado por kustomize/git — é criado
 # manualmente com o valor real da senha:
 #   kubectl create secret generic hu-db-credentials -n grupo-10 \

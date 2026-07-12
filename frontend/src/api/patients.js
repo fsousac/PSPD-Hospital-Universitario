@@ -1,6 +1,10 @@
 import { apiFetch } from './client.js';
 import { env } from '../config/env.js';
 
+// Backend agora pagina (default 50, teto 200 — ver docs/decisions/0005);
+// sem parâmetros aqui, retorna só a primeira página. UI de paginação fica
+// para um follow-up caso usuários com muitos vínculos precisem navegar além
+// da primeira página.
 export function listPatients() {
   return apiFetch('/api/v1/me/patients').then((payload) => ({
     accessLevel: payload.accessLevel || (payload.role === 'estagiario' ? 'PARTIAL' : 'FULL'),

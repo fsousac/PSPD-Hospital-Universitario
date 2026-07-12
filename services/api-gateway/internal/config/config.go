@@ -29,6 +29,11 @@ type Config struct {
 
 	// Timeouts das chamadas gRPC aos serviços internos.
 	UpstreamTimeout time.Duration
+
+	// Chave secreta (≥32 bytes) para o HMAC de pseudonimização de patient_id
+	// na coorte anonimizada (ver internal/gateway/research.go pseudonym).
+	// Sem default: o servidor recusa iniciar sem ela (ver cmd/gateway/main.go).
+	CohortPseudonymKey []byte
 }
 
 func Load() Config {
@@ -43,6 +48,7 @@ func Load() Config {
 		RateLimitRPS:             envFloat("RATE_LIMIT_RPS", 500),
 		RateLimitBurst:           envInt("RATE_LIMIT_BURST", 1000),
 		UpstreamTimeout:          time.Duration(envInt("UPSTREAM_TIMEOUT_MS", 5000)) * time.Millisecond,
+		CohortPseudonymKey:       []byte(env("COHORT_PSEUDONYM_KEY", "")),
 	}
 }
 

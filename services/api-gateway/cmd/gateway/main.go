@@ -37,6 +37,14 @@ func main() {
 	if *healthCheck {
 		os.Exit(runHealthCheck(cfg.ListenAddr))
 	}
+
+	// Recusa subir sem uma chave de pseudonimização forte o suficiente — sem
+	// isso, a rota de coorte anonimizada (/api/v1/research/*) não teria
+	// garantia real de não-reversibilidade (ver research.go pseudonym).
+	if len(cfg.CohortPseudonymKey) < 32 {
+		slog.Error("COHORT_PSEUDONYM_KEY ausente ou curta demais (mínimo 32 bytes) — recusando iniciar")
+		os.Exit(1)
+	}
 	slog.Info("iniciando api-gateway",
 		"listen", cfg.ListenAddr,
 		"auth", cfg.AuthServiceAddr,
