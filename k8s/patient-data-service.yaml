@@ -5,7 +5,10 @@ metadata:
   labels:
     app: patient-data-service
 spec:
-  replicas: 1
+  # 3 réplicas: já validado sob carga (kubectl scale manual) sem regressão de
+  # cota (ver docs/decisions/0005). Declarado aqui pra não se perder no
+  # próximo `kubectl apply -k`.
+  replicas: 3
   selector:
     matchLabels:
       app: patient-data-service
