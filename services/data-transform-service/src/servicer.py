@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 
@@ -75,8 +76,13 @@ class DataTransformServicer(pb2_grpc.DataTransformServiceServicer):
                 )
                 return pb2.FhirBundle()
 
-            encounters = await self._pds_client.list_encounters(request.patient_id)
-            events = await self._pds_client.get_clinical_events(request.patient_id)
+            # Independentes entre si (só dependem de patient_id, já resolvido
+            # acima) — paralelo em vez de série corta 1 round-trip da cadeia
+            # por requisição, o que pesa sob carga (ver docs/decisions/0005).
+            encounters, events = await asyncio.gather(
+                self._pds_client.list_encounters(request.patient_id),
+                self._pds_client.get_clinical_events(request.patient_id),
+            )
 
             if access_level == ACCESS_PARTIAL:
                 patient = anonymizer.apply_partial(patient)
