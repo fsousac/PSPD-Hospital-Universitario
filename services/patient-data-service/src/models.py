@@ -74,3 +74,17 @@ class UserPatientAssignment(Base):
     usuario_supervisor: Mapped[Optional[str]] = mapped_column("supervisor_username", String(80))
     # Coluna real é booleana ("active"), não status ('ativo'/'inativo').
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    # Schema real (ver 001_authorization_schema.sql): a decisão de autorização
+    # em si (projeto aprovado + vigente) continua no Authorization Service; aqui
+    # a PDS só serve o catálogo de projetos para leitura pelo pesquisador.
+    project_id: Mapped[str] = mapped_column(String(20), primary_key=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    researcher_username: Mapped[str] = mapped_column(String(80), nullable=False)
+    target_condition_code: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    valid_until: Mapped[date] = mapped_column(Date, nullable=False)

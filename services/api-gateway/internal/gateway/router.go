@@ -54,6 +54,15 @@ func Router(cfg config.Config, g *Gateway, verifier *auth.Verifier) http.Handler
 
 		pr.Get("/api/v1/patients/{id}", g.GetPatient)
 		pr.Get("/api/v1/me/patients", g.ListMyPatients)
+
+		// Pesquisa: catálogo de projetos + coorte/agregação por projeto.
+		pr.Get("/api/v1/research/projects", g.ListProjects)
+		pr.Get("/api/v1/research/projects/{id}", g.GetProject)
+		pr.Get("/api/v1/research/projects/{id}/aggregate", g.ProjectAggregate)
+		pr.Get("/api/v1/research/projects/{id}/cohort", g.ProjectCohort)
+
+		// Compat: agregação por query param (condition+project) — mantida para
+		// não quebrar chamadas antigas; o caminho novo é /projects/{id}/aggregate.
 		pr.Get("/api/v1/research/aggregate", g.AggregateResearch)
 	})
 
