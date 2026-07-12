@@ -38,7 +38,13 @@ cd loadtests
 ```
 
 Isso roda os 5 cenários em sequência e salva um resumo JSON por cenário em
-`loadtests/results/`. Para um cenário avulso:
+`loadtests/results/`. Antes de cada cenário, o script espera (até 150s) todos
+os pods do namespace (`grupo-10` por padrão, `NAMESPACE=` para mudar) ficarem
+`Ready` — se `kubectl` estiver disponível na máquina que roda o k6; senão o
+passo é pulado silenciosamente. Evita medir uma réplica sobrecarregada
+sozinha enquanto o HPA ainda está subindo uma réplica nova (cold start),
+padrão de falso-negativo já visto nesta entrega (ver
+`../docs/decisions/0005-k8s-observability-design.md`). Para um cenário avulso:
 
 ```bash
 k6 run --vus 100 --duration 2m k6-scenario.js
