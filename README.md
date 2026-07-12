@@ -195,7 +195,7 @@ docker compose up -d --build
 
 ---
 
-## Estrutura de pastas
+## Estrutura das pastas
 
 ```
 .
