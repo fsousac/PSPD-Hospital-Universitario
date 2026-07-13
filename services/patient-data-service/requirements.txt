@@ -9,3 +9,4 @@ python-dotenv==1.0.1
 pytest==9.1.1
 pytest-asyncio==1.4.0
 testcontainers[postgres]==4.7.2
+aiosqlite==0.20.0

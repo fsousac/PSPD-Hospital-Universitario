@@ -54,7 +54,20 @@ class PatientDataClient:
         # (clusterIP: None) do lado do patient-data-service (ver k8s/*.yaml).
         self._channel = grpc.aio.insecure_channel(
             "dns:///" + address,
-            options=[("grpc.lb_policy_name", "round_robin")],
+            options=[
+                ("grpc.lb_policy_name", "round_robin"),
+                # ponytail: grpc.aio roda sobre o mesmo C-core do grpc-go —
+                # mesma hipótese de resolver DNS obsoleto registrada em
+                # docs/decisions/0005 ("EM INVESTIGAÇÃO"), não confirmada por
+                # log ao vivo. O core já reconsulta o DNS periodicamente
+                # (default 30s) mesmo sem falha de conexão; reduzido pra 5s
+                # pra reagir mais rápido a réplicas novas do HPA dentro da
+                # janela de rampa dos testes k6 (15-135s). Custo: até 6x mais
+                # consultas DNS em regime estável, aceitável pro volume deste
+                # serviço. Se a hipótese se confirmar insuficiente mesmo
+                # assim, o próximo passo é ResolveNow() forçado periódico.
+                ("grpc.dns_min_time_between_resolutions_ms", 5000),
+            ],
         )
         self._stub = pb2_grpc.PatientDataServiceStub(self._channel)
 

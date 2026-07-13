@@ -65,6 +65,7 @@ public class AuthorizationGrpcService implements AuthorizationService {
     }
 
     @Override
+    @Blocking
     public Uni<ValidateTokenResponse> validateToken(ValidateTokenRequest request) {
         return Uni.createFrom().item(() -> {
             try {

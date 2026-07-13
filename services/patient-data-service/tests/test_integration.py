@@ -162,5 +162,14 @@ async def test_cohort_query(session_factory, seed_data):
         patients = (await session.execute(
             select(Patient).where(Patient.patient_id.in_(subq))
         )).scalars().all()
+
+        # GetCohortRaw reusa a mesma subquery (não uma lista Python de ids)
+        # para buscar os eventos do coorte — cobre a regressão do fix que
+        # elimina o IN(...) gigante com literais (ver docs/decisions/0005).
+        events = (await session.execute(
+            select(ClinicalEvent).where(ClinicalEvent.patient_id.in_(subq))
+        )).scalars().all()
     assert len(patients) == 1
     assert patients[0].patient_id == "P000001"
+    assert len(events) == 2
+    assert {e.event_id for e in events} == {"CE001", "CE002"}

@@ -46,8 +46,17 @@ spec:
             requests:
               cpu: "150m"
               memory: "128Mi"
+            # limit subido de 400m para 800m (2026-07-13): go.uber.org/automaxprocs
+            # (adicionado nesta rodada) faz o GOMAXPROCS passar a respeitar o
+            # cgroup limit em vez do total de cores do nó — sob 400m
+            # (<1 core), GOMAXPROCS passa a ficar fixo em 1. O gateway é
+            # I/O-bound (nunca cruzou 70% de CPU nos testes já documentados
+            # em docs/decisions/0005), então 1 core basta pro regime normal,
+            # mas 800m dá folga pro trabalho de CPU real (parse/verificação
+            # de JWT, JSON) não ficar artificialmente mais apertado do que
+            # antes da mudança. Request mantido (não custa cota ociosa).
             limits:
-              cpu: "400m"
+              cpu: "800m"
               memory: "256Mi"
           livenessProbe:
             httpGet:

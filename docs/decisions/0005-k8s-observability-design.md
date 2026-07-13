@@ -743,3 +743,164 @@ diluiria os números e mascararia se a capacidade sustentada real
   acessíveis (`/metrics` e `/q/metrics`, todos HTTP 200), ServiceMonitors
   corretos. Dashboards no Grafana seguem bloqueados por permissão
   (`admgrp10` Viewer-only) — ver `observability/README.md`.
+
+## [EM INVESTIGAÇÃO] Colapso em 50 VUs reaparece mesmo com os fixes de rampa/HPA (2026-07-13)
+
+Rerun completo de `run-scenarios.sh` (já com rampa calibrada por nível e
+`behavior.scaleUp` agressivo) voltou a colapsar em 50 VUs: 75.31% de falha,
+`p(95)=5s` em `http_req_duration{phase:main}` — a mesma assinatura (falhas
+batendo exatamente no `UPSTREAM_TIMEOUT_MS=5000`) já descrita e supostamente
+resolvida nas seções acima. 10 VUs passou limpo (0% falha, p95=197ms) no
+mesmo rerun, então não é regressão de código nos serviços — o padrão indica
+o mesmo mecanismo de cold-start, só que a rampa calibrada (60s pra 50 VUs)
+ainda não cobre o pior caso.
+
+Duas causas contribuintes identificadas nesta investigação (nenhuma
+mencionada nas seções anteriores):
+
+1. **`authorization-service` carregava a extensão `quarkus-oidc` sem
+   nenhum uso real.** `TokenValidationService` (único ponto de validação de
+   token) usa só `smallrye-jwt` manual — sem `@Authenticated`,
+   `SecurityIdentity` ou `OidcSession` em lugar nenhum do código. A
+   extensão morta ainda inicializa no boot (inclusive descoberta contra o
+   Keycloak externo compartilhado), custo puro sem função, que só piora sob
+   os mesmos 500m de CPU limit que já sofrem throttling de JVM.
+2. **500m de CPU limit é pouco para o boot de uma JVM (Quarkus fast-jar,
+   não native)** — class-loading + JIT + Hibernate ORM Panache + gRPC
+   server sob CPU throttling real pode facilmente estourar os 60s do
+   `startupProbe`. Somado ao atraso do metrics-server pra disparar o
+   scale-up (~15-30s), o tempo total de convergência pode superar os 60s de
+   rampa calibrados — a réplica nova não fica `Ready` a tempo, e a réplica
+   original segura 100% da carga sozinha (mesmo gargalo da fase c, agora
+   por lentidão de boot, não por falta de réplica).
+
+**Fix aplicado** (aguardando rebuild + push + redeploy + reteste — não
+executável deste ambiente, sem `kubectl`/acesso ao cluster):
+`services/authorization-service/build.gradle` e `application.properties` —
+removida a dependência `quarkus-oidc` e as propriedades `quarkus.oidc.*`
+associadas (as linhas `mp.jwt.verify.*` continuam reaproveitando o nome da
+env var `QUARKUS_OIDC_AUTH_SERVER_URL`, mas não ativam mais a extensão).
+`k8s/authorization-service.yaml` — `resources.limits.cpu` de `500m` para
+`1000m` (request mantido em `200m`, não custa cota ociosa fora de janela de
+teste).
+
+Terceira hipótese, não confirmada (precisa validação ao vivo, ver comandos
+abaixo): o resolver DNS padrão do grpc-go (`google.golang.org/grpc
+v1.64.0`, usado por `services/api-gateway/internal/clients/clients.go`) só
+reconsulta o DNS periodicamente num intervalo longo ou quando uma conexão
+existente falha — não quando novos pods aparecem no headless service sem
+erro nenhum. Se o canal gRPC do gateway já foi aberto (no aquecimento do
+`setup()` do k6) antes do HPA escalar `authorization-service`/
+`patient-data-service`, as réplicas novas podem nunca entrar no
+`round_robin` durante aquele teste específico — explicaria por que o mesmo
+fix de pinagem gRPC "funcionou" uma vez e falha de novo agora, dependendo
+de quando o canal foi aberto em relação ao scale-up.
+
+**Verificação pendente** (rodar na VM da disciplina durante um rerun de 50
+VUs):
+
+```bash
+kubectl get events -n grupo-10 --field-selector involvedObject.kind=Pod | grep authorization-service
+kubectl logs -n grupo-10 -l app=authorization-service --since=10m | grep -i "started in\|listening"
+kubectl get hpa -n grupo-10 -w
+```
+
+Se a hipótese 3 se confirmar, o fix é forçar `ResolveNow()` periódico nas
+conexões do `api-gateway` (`clients.go`) em vez de depender só do
+`round_robin` estático — não implementado ainda, pendente de confirmação
+pra não corrigir o sintoma errado.
+
+## Rodada de melhorias de concorrência por serviço (2026-07-13)
+
+Com a hipótese 3 acima ainda em aberto, uma revisão dedicada de concorrência
+foi feita em paralelo nos 4 serviços (um agente por serviço, cada um restrito
+ao próprio diretório para não conflitar com os demais). Resumo consolidado:
+
+**`api-gateway`** (`internal/clients/clients.go`, `cmd/gateway/main.go`,
+`go.mod`):
+- **Resolve a hipótese 3 preventivamente** (sem esperar a confirmação ao
+  vivo pendente acima): as 3 conexões gRPC (authorization-service,
+  patient-data-service, data-transform-service) agora chamam
+  `conn.ResolveNow(resolver.ResolveNowOptions{})` a cada 12s (uma goroutine
+  de background, encerrada de forma limpa em `Close()`), forçando o
+  round_robin a descobrir réplicas novas do HPA sem depender do timing de
+  reconsulta padrão do grpc-go nem de uma falha de conexão.
+- `go.uber.org/automaxprocs` adicionado (import em branco em
+  `cmd/gateway/main.go`) — `GOMAXPROCS` passa a respeitar o `cgroup` limit
+  do container em vez do total de cores do nó. Combinado com isso, o limit
+  de CPU subiu de `400m` para `800m` (ver `k8s/api-gateway.yaml`) pra não
+  apertar mais o gateway do que estava antes da mudança.
+- `grpc.WithKeepaliveParams` adicionado (`Time: 6min`, conservador de
+  propósito — nenhum dos 3 backends configura `keepalive.EnforcementPolicy`
+  do lado do servidor, então um valor mais agressivo arriscaria
+  `GOAWAY`/`too_many_pings`; ajustar junto com os outros serviços se for
+  reduzir depois).
+- **Atenção ao rebuild**: `go.sum` não foi regenerado (sem `go` instalado
+  neste ambiente de revisão) — rodar `go mod tidy` antes do próximo build de
+  imagem.
+
+**`authorization-service`** (`AuthorizationGrpcService.java`,
+`application.properties`):
+- `validateToken()` não tinha `@Blocking`, mas faz a mesma validação
+  criptográfica de JWT que `authorize()` (que já tinha) — sob concorrência,
+  rodava no event loop do Vert.x e bloqueava todo o resto do tráfego daquela
+  réplica enquanto validava um token. Corrigido adicionando `@Blocking`,
+  consistente com o método irmão.
+- Pool do Agroal explicitado (`min-size=2`, `max-size=8` — default do
+  Agroal era `0`/`20`): `min-size=0` custava handshake TCP+fork do Postgres
+  na primeira rajada de cada réplica (mesma classe de cold-start já
+  diagnosticada pro boot da JVM); `max-size=8` limita o pior caso a 80
+  conexões com HPA no teto de 10 réplicas, coerente com o orçamento
+  compartilhado do Postgres (`max_connections=500` ÷ 10 grupos da
+  disciplina).
+- Build e testes (incluindo o IT com testcontainers que exercita
+  `validateToken`) confirmados passando.
+
+**`patient-data-service`** (`src/database.py`, `src/servicer.py`):
+- Pool do SQLAlchemy/asyncpg reduzido de `pool_size=5, max_overflow=10`
+  (15/réplica) para `pool_size=3, max_overflow=2` (5/réplica) — o antigo
+  teto permitia até 150 conexões só deste serviço no teto do HPA (30% do
+  orçamento compartilhado do Postgres), muito acima do pico real já
+  observado (~9 conexões simultâneas, ver testes anteriores neste ADR).
+- `GetCohortRaw` tinha o mesmo padrão de bug já corrigido em
+  `GetPatientsByCarer`: um `IN(...)` montado a partir de uma lista Python de
+  IDs (potencialmente milhares de literais) em vez de reaproveitar a
+  subquery já usada para `patients`. Corrigido.
+- Confirmado que este serviço já é assíncrono ponta a ponta (`asyncpg` +
+  `grpc.aio`, sem chamada síncrona bloqueando o event loop) — a hipótese de
+  "driver de DB bloqueante" não se aplicava aqui.
+- 19/19 testes passando (incluindo um novo teste de regressão pro fix do
+  `GetCohortRaw`, contra Postgres real via testcontainers).
+
+**`data-transform-service`** (`src/client/patient_data_client.py`,
+`src/main.py`, `src/servicer.py`):
+- Mitigação defensiva da hipótese 3 do lado Python (mesmo resolver C-core
+  do grpc-go, mesmo risco): `grpc.dns_min_time_between_resolutions_ms`
+  reduzido para 5000 no canal com `patient-data-service` — confirmado que a
+  opção existe na versão pinada do `grpcio` antes de usar.
+- `GRPC_MAX_WORKERS` estava importado mas nunca efetivamente passado pro
+  servidor — sem proteção real contra overload nenhuma. Corrigido, agora
+  alimenta `maximum_concurrent_rpcs` de fato.
+- `AggregateForResearch` fazia trabalho Python CPU-bound
+  (`compute_aggregate`/`aggregate_to_json`) síncrono sobre uma coorte não
+  paginada — bloqueava o event loop asyncio pra todo o resto do tráfego
+  daquela réplica durante o cálculo. Envolvido em `asyncio.to_thread`.
+- 56 testes passando.
+
+**Achado transversal, não corrigido (falso-positivo descartado com
+cuidado)**: tanto `patient-data-service` quanto `data-transform-service` têm
+uma variável `GRPC_MAX_WORKERS` documentada como "tamanho do thread pool
+gRPC" que não faz sentido para `grpc.aio` (concorrência é via event loop
+asyncio, não thread pool) — no `data-transform-service` já virou
+`maximum_concurrent_rpcs` de verdade (acima); no `patient-data-service`
+continua uma configuração morta, não corrigida por estar fora do escopo
+desta rodada (nenhum bloqueio de event loop foi encontrado lá que
+justificasse mexer). Fica registrado como ponto de limpeza futura, não
+bloqueador.
+
+**Orçamento de conexões Postgres, consolidado**: com os dois pools agora
+explícitos, o teto teórico combinado no pior caso (HPA no máximo dos dois
+serviços simultaneamente) é `authorization-service` 10×8=80 +
+`patient-data-service` 10×5=50 = 130 conexões, ~26% dos 500
+`max_connections` compartilhados por 10 grupos — folga razoável dado que os
+testes já documentados neste ADR nunca aproximaram esse teto na prática.

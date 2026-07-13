@@ -13,8 +13,8 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 /**
  * Valida/parseia o JWT que chega no corpo da mensagem gRPC (não no header
  * "authorization" da chamada) — ver ADR 0001. Usa o JWTParser do
- * quarkus-smallrye-jwt, configurado contra o JWKS do mesmo realm Keycloak
- * usado pelo quarkus-oidc.
+ * quarkus-smallrye-jwt, configurado contra o JWKS do realm Keycloak (ver
+ * application.properties) — não depende da extensão quarkus-oidc.
  */
 @ApplicationScoped
 public class TokenValidationService {

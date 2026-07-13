@@ -138,8 +138,17 @@ class DataTransformServicer(pb2_grpc.DataTransformServiceServicer):
 
             patients, events = await self._pds_client.get_cohort_raw(request.clinical_condition)
 
-            stats = aggregator.compute_aggregate(request.clinical_condition, patients, events)
-            json_payload = aggregator.aggregate_to_json(stats)
+            # get_cohort_raw não é paginado (ver patient-data-service
+            # GetCohortRaw) — pode devolver uma coorte grande. compute_aggregate
+            # é CPU-bound puro-Python e, chamado direto aqui, bloquearia o
+            # event loop (single-thread) inteiro até terminar, travando toda
+            # RPC concorrente do processo (mesma classe de bug já resolvida em
+            # patient-data-service para volume de dados, ver docs/decisions/0005).
+            # to_thread tira o cálculo do event loop sem precisar de pool próprio.
+            stats = await asyncio.to_thread(
+                aggregator.compute_aggregate, request.clinical_condition, patients, events
+            )
+            json_payload = await asyncio.to_thread(aggregator.aggregate_to_json, stats)
 
             gender = stats.get("gender_distribution", {})
             age = stats.get("age_distribution", {})
