@@ -21,11 +21,7 @@ async def serve() -> None:
             ("grpc.max_send_message_length", 64 * 1024 * 1024),
             ("grpc.max_receive_message_length", 64 * 1024 * 1024),
         ],
-        # GRPC_MAX_WORKERS estava definido em config.py mas nunca era lido
-        # aqui (config morta) — sem nenhum teto, o servidor aceitava
-        # qualquer número de RPCs concorrentes. Reconectado como válvula de
-        # overload (RESOURCE_EXHAUSTED em vez de degradar tudo).
-        maximum_concurrent_rpcs=GRPC_MAX_WORKERS,
+        maximum_concurrent_rpcs=GRPC_MAX_WORKERS,  # antes lido mas nunca aplicado
     )
     pb2_grpc.add_DataTransformServiceServicer_to_server(DataTransformServicer(), server)
     server.add_insecure_port(f"0.0.0.0:{GRPC_PORT}")

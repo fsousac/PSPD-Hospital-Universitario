@@ -41,14 +41,8 @@ spec:
             requests:
               cpu: "200m"
               memory: "384Mi"
-            # limit de CPU subido de 500m para 1000m (2026-07-13): sob 500m,
-            # o boot da JVM (class-loading + JIT + Hibernate ORM Panache +
-            # gRPC server) sofre CPU throttling real e pode facilmente
-            # estourar os 60s do startupProbe sob carga — foi a causa
-            # provável do colapso repetido em 50 VUs mesmo depois dos fixes
-            # de rampa/HPA já aplicados (ver docs/decisions/0005). Request
-            # não mudou: só afeta o teto de burst durante o boot, não o
-            # custo ocioso da ResourceQuota compartilhada.
+            # 500m->1000m: sob 500m o boot da JVM sofria CPU throttling e estourava
+            # os 60s do startupProbe sob carga (ver docs/decisions/0005)
             limits:
               cpu: "1000m"
               memory: "512Mi"

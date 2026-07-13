@@ -195,12 +195,7 @@ class PatientDataServicer(pb2_grpc.PatientDataServiceServicer):
                     select(Patient).where(Patient.patient_id.in_(subq))
                 )).scalars().all()
 
-                # Reusa a subquery (não a lista Python de patients já
-                # buscados) para filtrar os eventos: monta um IN(subquery) no
-                # próprio SQL em vez de um IN(...) com milhares de literais
-                # embutidos na query quando a condição bate muita gente —
-                # mesma classe de round-trip caro já corrigida em
-                # GetPatientsByCarer (ver docs/decisions/0005).
+                # subq em vez da lista de patients: evita IN(...) gigante (mesma classe do fix em GetPatientsByCarer)
                 events = (await session.execute(
                     select(ClinicalEvent).where(ClinicalEvent.patient_id.in_(subq))
                 )).scalars().all()

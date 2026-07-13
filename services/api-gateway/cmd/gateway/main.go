@@ -18,7 +18,7 @@ import (
 	"syscall"
 	"time"
 
-	_ "go.uber.org/automaxprocs" // ajusta GOMAXPROCS ao cpu.limit do cgroup (400m no k8s/api-gateway.yaml) em vez do NumCPU() do nó inteiro — evita over-scheduling de goroutines sob CPU limit baixo
+	_ "go.uber.org/automaxprocs" // GOMAXPROCS segue o cpu.limit do cgroup, não o NumCPU() do nó
 
 	"github.com/rabelzx/hu-gateway/internal/auth"
 	"github.com/rabelzx/hu-gateway/internal/clients"
